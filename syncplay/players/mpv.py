@@ -397,6 +397,10 @@ class MpvPlayer(BasePlayer):
         self._listener.sendLine(['sub-add', path, 'select'])
         return True
 
+    def setSubtitleDelay(self, seconds):
+        self._setProperty("sub-delay", float(seconds))
+        return True
+
     def openFile(self, filePath, resetPosition=False):
         self._client.ui.showDebugMessage("openFile, resetPosition=={}".format(resetPosition))
         if resetPosition:

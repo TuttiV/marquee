@@ -492,6 +492,23 @@ class ConfigurationGetter(object):
         if changed:
             parser.write(codecs.open(iniPath, "wb", "utf_8_sig"))
 
+    def _prepareQuickJoin(self):
+        """Opening an invite link should just work: find a player and a name without asking. True when both are known
+        (and so no start window is needed); False means the window is shown as usual."""
+        try:
+            if not self._config['playerPath']:
+                for path in utils.orderPlayerPaths(PlayerFactory().getAvailablePlayerPaths()):
+                    if utils.playerPathExists(path):
+                        self._config['playerPath'] = path
+                        break
+            if not self._config['name']:
+                import getpass
+                name = re.sub(r"[^A-Za-z0-9_\-]", "", getpass.getuser())[:20]
+                self._config['name'] = name[:1].upper() + name[1:] if name else ""
+        except Exception:
+            return False
+        return bool(self._config['playerPath']) and bool(self._config['name']) and bool(self._config['host'])
+
     @staticmethod
     def _shiftHeld():
         """Holding Shift while the app opens brings the start window back (Windows only)."""
@@ -542,6 +559,11 @@ class ConfigurationGetter(object):
         iniPath = self._getConfigurationFilePath()
         self._config['configPath'] = iniPath
         self._config['configDir'] = os.path.dirname(os.path.abspath(iniPath))
+        try:
+            from syncplay.ui import theme
+            theme.setConfigDir(self._config['configDir'])  # So the start window already uses the chosen theme
+        except Exception:
+            pass
         self._parseConfigFile(iniPath)
         #
         # Watch out for the method self._overrideConfigWithArgs when you're adding custom multi-word command line arguments
@@ -630,14 +652,18 @@ class ConfigurationGetter(object):
         from syncplay import updater
         restartedForUpdate = updater.restartedWithoutPrompt()  # Straight back into the room, without the start dialog
         skipForSavedRoom = (self._config['skipStartWindow'] in (True, "True") and not args.force_gui_prompt and not self._shiftHeld())
+        quickJoin = bool(link) and not args.force_gui_prompt and not self._shiftHeld() and self._prepareQuickJoin()
         if (self._config['forceGuiPrompt'] == "True" or not self._config['file']) and not self._config['noGui'] and not utils.isWindowsConsole() \
-                and not restartedForUpdate and not self._inviteFitsSavedSetup and not skipForSavedRoom:
+                and not restartedForUpdate and not self._inviteFitsSavedSetup and not skipForSavedRoom and not quickJoin:
             self._forceGuiPrompt()
             if self._config['startWindowAsked'] not in (True, "True"):
                 # Once the first setup is done the app opens straight into your room from now on (File > Connection settings undoes it)
                 self._config['skipStartWindow'] = True
                 self._config['startWindowAsked'] = True
                 self._config['startWindowNowSkipped'] = True
+        if quickJoin and self._config['startWindowAsked'] not in (True, "True"):
+            self._config['skipStartWindow'] = True  # Later launches open straight into the room too
+            self._config['startWindowAsked'] = True
         self._checkConfig()
         self._config['configPath'] = iniPath
         self._config['configDir'] = os.path.dirname(os.path.abspath(iniPath))

@@ -352,6 +352,8 @@ class SyncClientProtocol(JSONCommandProtocol):
             return
         if self._client.handleSubtitlePresenceChat(username, userMessage):
             return
+        if self._client.handleSubtitleDelayChat(username, userMessage):
+            return
         self._client.ui.showChatMessage(username, userMessage)
 
     def setReady(self, isReady, manuallyInitiated=True, username=None):

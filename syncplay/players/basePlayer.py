@@ -70,6 +70,13 @@ class BasePlayer(object):
         return False
 
     '''
+    @type seconds: float (positive shows subtitles later)
+    @return: True if the subtitle delay was applied, False if this player can't do that
+    '''
+    def setSubtitleDelay(self, seconds):
+        return False
+
+    '''
     @return: list of strings
     '''
     @staticmethod

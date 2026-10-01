@@ -1,3 +1,14 @@
+## Build 26 - Themes, shared subtitle delay, emoji and a smoother start
+- Window > Theme: Same as Windows, Dark, Light and three new looks: Cinema (warm black and gold), Midnight (true black with cyan) and Sand (warm paper-like light). It switches instantly and is remembered.
+- Subtitles > earlier / later (Ctrl+Shift+[ and ]) move the subtitle delay for everyone using this app at once, in 0.1 s steps; a new video starts at zero. Works with mpv (VLC can't change it from outside and says so).
+- Help > Copy diagnostics copies the version, connection state and recent log to the clipboard to paste when asking for help. Passwords, keys, your name, room and file names are left out.
+- File > Reopen player (Ctrl+Shift+R) restarts the app with the same video and room, for a player that froze.
+- Chat: an emoji button next to Send, :shortcodes: like :fire: and :tada: turn into emoji, and a message that is only emoji shows large like a reaction.
+- Opening an invite link now joins straight away when a player and name can be found (no start window), and the chat says who is already in the room.
+- The Ready button glides between Not ready and Ready, with the tick drawing itself.
+- Updates now download quietly in the background. A slim bar says the new build is ready with Restart now or Later; ignore it and it installs the next time the app starts.
+- The people table redraws as soon as someone's subtitle changes.
+
 ## Build 25 - A cleaner look
 - The window is calmer: the header keeps just Copy invite and a "..." menu (subtitles, library, voice, private room), room options live behind the sliders icon, the room shows as "Room: name - change", and an empty shared playlist folds down to one line.
 - The people list shows everyone's ready state in words (Ready / Not ready), the file each person has open (amber if it differs from yours, reason in the tooltip) and the subtitle they have on when they use Marquee.

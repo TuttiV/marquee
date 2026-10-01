@@ -433,3 +433,18 @@ class RollbackTests(unittest.TestCase):
         updater.rollBack(self.app, "boom")
         self.assertEqual(len(updater.unseenHistory(self.app)), 1)
         self.assertEqual(updater.unseenHistory(self.app), [])
+
+
+class StagedBuildTests(unittest.TestCase):
+    def test_the_staged_build_number_is_read_from_the_staged_files(self):
+        app = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, app, True)
+        self.assertEqual(updater.stagedBuild(app), 0)
+        staging = os.path.join(app, updater.STAGING, "syncplay")
+        os.makedirs(staging)
+        with open(os.path.join(staging, "private_build.py"), "w") as f:
+            f.write("# comment\nBUILD = 31\n")
+        self.assertEqual(updater.stagedBuild(app), 0)  # Not complete until it is marked ready
+        with open(os.path.join(app, updater.STAGING, updater.READY_MARKER), "w") as f:
+            f.write("ok")
+        self.assertEqual(updater.stagedBuild(app), 31)

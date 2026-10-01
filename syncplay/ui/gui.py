@@ -15,14 +15,14 @@ from twisted.internet import task
 from syncplay import utils, constants, version, revision, release_number
 from syncplay.messages import getMessage
 from syncplay.ui.consoleUI import ConsoleUI
-from syncplay import branding, updater, instance, secrets, install, playlistfile, voice, links, resume
+from syncplay import branding, updater, instance, secrets, install, playlistfile, voice, links, resume, emoji, subdelay
 from syncplay import invite as inviteLinks
 from syncplay.private_build import BUILD
 from syncplay.ui import icons, theme
 from syncplay.ui.SubtitleDialog import SubtitleDialog
 from syncplay.ui.TorBoxDialog import TorBoxDialog
 from syncplay.ui.UpdateLogDialog import UpdateLogDialog
-from syncplay.ui.panels import ProgressStrip, ClickableLabel
+from syncplay.ui.panels import ProgressStrip, ClickableLabel, ReadyButton, EmojiPicker
 from syncplay.utils import resourcespath
 from syncplay.utils import isLinux, isWindows, isMacOS
 from syncplay.utils import formatTime, sameFilename, sameFilesize, sameFileduration, RoomPasswordProvider, formatSize, isURL
@@ -824,6 +824,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._fitPlaylist()
         self._setUpInviteLinks()
         try:
+            if self.config.get("configDir"):
+                theme.setConfigDir(self.config["configDir"])
+                for themeName, action in getattr(self, "themeActions", {}).items():
+                    action.setChecked(themeName == theme.chosenTheme())
+                if theme.chosenTheme() != "system":
+                    QtCore.QTimer.singleShot(0, lambda: self.switchTheme(theme.chosenTheme()))
             self.playlistGroup.blockSignals(True)
             self.playlistGroup.setChecked(self.config['sharedPlaylistEnabled'])
             self.playlistGroup.blockSignals(False)
@@ -885,6 +891,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if username:
             self._noticeChat(username, plain)
             message = links.linkify(message)
+            if emoji.isOnlyEmoji(plain):
+                message = '<span style="font-size: 26px;">{}</span>'.format(message)  # A lone emoji reads as a reaction
             self._feedChat(username, message)
         elif isMotd:
             # A MOTD is monospace with escaped spaces so ASCII art keeps its shape
@@ -1110,6 +1118,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updateListGeometry()
         self._applyFileColumns()
         self._updateFileLine(currentUser, rooms)
+        self._welcomeNote(currentUser, rooms)
         self._syncplayClient.fileSwitch.setFilenameWatchlist(self.newWatchlist)
         self.fillRoomsCombobox()
         self.updateStatusBar(currentUser, rooms)
@@ -1132,6 +1141,8 @@ class MainWindow(QtWidgets.QMainWindow):
         ("syncCheckAction", "clock"), ("shareSubtitleFileAction", "plus"), ("loadSharedSubtitleAction", "link"),
         ("editroomsAction", "list"), ("updateSourceAction", "link"), ("updateLogAction", "list"), ("shortcutsAction", "plus"),
         ("uninstallAction", "trash"), ("userguideAction", "help"), ("updateAction", "download"),
+        ("reopenPlayerAction", "refresh"), ("diagnosticsAction", "info"), ("subDelayEarlierAction", "chevron"), ("subDelayLaterAction", "chevron"),
+        ("subDelayResetAction", "undo"),
     )
 
     def _iconAllMenuItems(self, window):
@@ -1141,6 +1152,17 @@ class MainWindow(QtWidgets.QMainWindow):
             action = getattr(window, attribute, None)
             if action is not None and not action.isCheckable():
                 action.setIcon(icons.icon(name, tokens["text"], 16))
+
+    def _welcomeNote(self, currentUser, rooms):
+        """Once per start: say who is already in your room (so joining from a link feels like arriving somewhere)."""
+        if getattr(self, "_welcomed", False):
+            return
+        others = [user.username for user in rooms.get(currentUser.room, []) if user.username.strip() and user.username != currentUser.username]
+        self._welcomed = True
+        if others:
+            self.showMessage(getMessage("welcome-others-here").format(", ".join(others[:4]) + (" and {} more".format(len(others) - 4) if len(others) > 4 else "")))
+        else:
+            self.showMessage(getMessage("welcome-first-here"))
 
     def _applyFileColumns(self):
         """Who is on which file and subtitle is always shown; size and length only appear when someone's differs, and a
@@ -1855,6 +1877,22 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._syncplayClient.playlist.changePlaylist(newPlaylist)
                 self._syncplayClient.fileSwitch.updateInfo()
 
+    def switchTheme(self, name):
+        """Window > Theme: change the look right now and remember it for next time."""
+        theme.chooseTheme(name)
+        self.applyTheme()
+        self._iconAllMenuItems(self)
+        self.updateReadyIcon()
+        try:
+            self.outputbox.document().setDefaultStyleSheet("a {{color: {}; }}".format(theme.tokens(self._dark)["link"]))
+            self._tickProgress()
+            if self._syncplayClient:
+                self._syncplayClient.showUserList()
+        except Exception:
+            pass
+        for themeName, action in self.themeActions.items():
+            action.setChecked(themeName == theme.chosenTheme())
+
     def applyTheme(self):
         self._dark = theme.applyApplicationTheme(QtWidgets.QApplication.instance())
         tokens = theme.tokens(self._dark)
@@ -1869,6 +1907,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.voiceChip.setIcon(icons.icon("mic", tokens["text"], 14))
         self.moreChip.setIcon(icons.icon("more", tokens["text"], 16))
         self.tuneButton.setIcon(icons.icon("tune", tokens["text"], 16))
+        self.emojiButton.setIcon(icons.icon("smile", tokens["text"], 18))
         self.style().unpolish(self.chatButton)
         self.style().polish(self.chatButton)
         self.updateReadyIcon()
@@ -1898,6 +1937,28 @@ class MainWindow(QtWidgets.QMainWindow):
         bannerLayout.addWidget(self.bannerLabel, 1)
         bannerLayout.addWidget(self.bannerButton)
         self.connectionBanner.hide()
+        self.updateBar = QtWidgets.QFrame()
+        self.updateBar.setObjectName("updateBar")
+        self.updateBar.setFixedHeight(42)
+        updateLayout = QtWidgets.QHBoxLayout(self.updateBar)
+        updateLayout.setContentsMargins(12, 4, 8, 4)
+        self.updateBarLabel = QtWidgets.QLabel("")
+        self.updateBarLabel.setObjectName("resumeText")
+        self.updateRestartButton = QtWidgets.QPushButton(getMessage("update-bar-restart-button"))
+        self.updateRestartButton.setProperty("tone", "blue")
+        self.updateLaterButton = QtWidgets.QPushButton(getMessage("update-bar-later-button"))
+        for button in (self.updateRestartButton, self.updateLaterButton):
+            button.setFixedHeight(28)
+            button.setCursor(Qt.PointingHandCursor)
+            button.setStyleSheet("padding: 0 14px; min-height: 0;")
+        self.updateRestartButton.clicked.connect(self.restartForUpdate)
+        self.updateLaterButton.clicked.connect(self.updateBar.hide)
+        updateLayout.addWidget(self.updateBarLabel, 1)
+        updateLayout.addWidget(self.updateRestartButton)
+        updateLayout.addWidget(self.updateLaterButton)
+        self.updateBar.hide()
+        self.mainLayout.insertWidget(1, self.updateBar)
+        self._updateDownloading = False
         self.mainLayout.insertWidget(0, self.connectionBanner)
         self.resumeBar = QtWidgets.QFrame()
         self.resumeBar.setObjectName("resumeBar")
@@ -2562,6 +2623,46 @@ class MainWindow(QtWidgets.QMainWindow):
         self.showMessage("/{}".format(command))
         self.console.executeCommand(command)
 
+    @needsClient
+    def nudgeSubtitleDelay(self, by):
+        """Subtitles > earlier / later / reset: everyone's subtitle delay moves together."""
+        if by is None:
+            self._syncplayClient.changeSharedSubtitleDelay(seconds=0.0)
+        else:
+            self._syncplayClient.changeSharedSubtitleDelay(by=by)
+
+    def subtitleDelayChanged(self, seconds, applied):
+        self._statusSubDelay = seconds
+        if getattr(self, "_subDelayShownFor", None) != seconds:
+            self._subDelayShownFor = seconds
+            self.showMessage(getMessage("subdelay-now").format(subdelay.describe(seconds)))
+
+    @needsClient
+    def reopenPlayer(self):
+        try:
+            self._syncplayClient.reopenPlayer()
+        except OSError as e:
+            QtWidgets.QMessageBox.information(self, branding.NAME, str(e) or getMessage("reopenplayer-failed"))
+
+    @needsClient
+    def copyDiagnostics(self):
+        text = self._syncplayClient.diagnosticsText()
+        QtWidgets.QApplication.clipboard().setText(text)
+        self.showMessage(getMessage("diagnostics-copied").format(len(text.splitlines())))
+
+    def showEmojiPicker(self):
+        picker = EmojiPicker(emoji.PICKER, self)
+        picker.picked.connect(self._insertEmoji)
+        self._emojiPicker = picker
+        picker.adjustSize()
+        anchor = self.emojiButton.mapToGlobal(QtCore.QPoint(self.emojiButton.width(), 0))
+        picker.move(anchor.x() - picker.width(), anchor.y() - picker.height() - 6)
+        picker.show()
+
+    def _insertEmoji(self, symbol):
+        self.chatInput.insert(symbol)
+        self.chatInput.setFocus()
+
     def sendChatMessage(self):
         chatText = self.chatInput.text()
         self.chatInput.setText("")
@@ -2573,7 +2674,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 else:
                     self.executeCommand(command)
                     return
-            self._syncplayClient.sendChat(chatText)
+            self._syncplayClient.sendChat(emoji.expand(chatText))
 
     def addTopLayout(self, window):
         window.topSplit = self.topSplitter(Qt.Horizontal, self)
@@ -2610,7 +2711,12 @@ class MainWindow(QtWidgets.QMainWindow):
         window.chatFrame.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
         window.chatLayout.setContentsMargins(0, 0, 0, 0)
         self.chatButton.setToolTip(getMessage("sendmessage-tooltip"))
+        window.emojiButton = QtWidgets.QToolButton()
+        window.emojiButton.setObjectName("moreButton")
+        window.emojiButton.setToolTip(getMessage("emoji-button-tooltip"))
+        window.emojiButton.clicked.connect(self.showEmojiPicker)
         window.chatLayout.addWidget(window.chatInput)
+        window.chatLayout.addWidget(window.emojiButton)
         window.chatLayout.addWidget(window.chatButton)
         window.chatFrame.setMaximumHeight(window.chatFrame.sizeHint().height())
         window.outputFrame = QtWidgets.QFrame()
@@ -2857,7 +2963,7 @@ class MainWindow(QtWidgets.QMainWindow):
         window.listSplit.setStretchFactor(1, 2)
         window.listSplit.setSizes([320, 140])
 
-        window.readyPushButton = QtWidgets.QPushButton()
+        window.readyPushButton = ReadyButton()
         readyFont = QtGui.QFont()
         readyFont.setWeight(QtGui.QFont.Bold)
         window.readyPushButton.setText(getMessage("ready-guipushbuttonlabel"))
@@ -3004,6 +3110,9 @@ class MainWindow(QtWidgets.QMainWindow):
         window.skipStartAction.toggled.connect(self.toggleSkipStartWindow)
         window.reconnectAction = window.fileMenu.addAction(menuIcon("reconnect"), getMessage("reconnect-menu-label"))
         window.reconnectAction.triggered.connect(self.reconnectToServer)
+        window.reopenPlayerAction = window.fileMenu.addAction(getMessage("reopenplayer-menu-label"))
+        window.reopenPlayerAction.setShortcut("Ctrl+Shift+R")
+        window.reopenPlayerAction.triggered.connect(self.reopenPlayer)
 
         window.exitAction = window.fileMenu.addAction(getMessage("exit-menu-label"))
         if isMacOS():
@@ -3055,6 +3164,15 @@ class MainWindow(QtWidgets.QMainWindow):
         window.loadSharedSubtitleAction = window.subtitlesMenu.addAction(
             menuIcon("film_link"), getMessage("loadsharedsubtitle-menu-label"))
         window.loadSharedSubtitleAction.triggered.connect(self.loadSharedSubtitle)
+        window.subtitlesMenu.addSeparator()
+        window.subDelayEarlierAction = window.subtitlesMenu.addAction(getMessage("subdelay-earlier-menu-label"))
+        window.subDelayEarlierAction.setShortcut("Ctrl+Shift+[")
+        window.subDelayEarlierAction.triggered.connect(lambda checked=False: self.nudgeSubtitleDelay(-subdelay.STEP))
+        window.subDelayLaterAction = window.subtitlesMenu.addAction(getMessage("subdelay-later-menu-label"))
+        window.subDelayLaterAction.setShortcut("Ctrl+Shift+]")
+        window.subDelayLaterAction.triggered.connect(lambda checked=False: self.nudgeSubtitleDelay(subdelay.STEP))
+        window.subDelayResetAction = window.subtitlesMenu.addAction(getMessage("subdelay-reset-menu-label"))
+        window.subDelayResetAction.triggered.connect(lambda checked=False: self.nudgeSubtitleDelay(None))
 
         window.menuBar.addMenu(window.subtitlesMenu)
 
@@ -3094,6 +3212,14 @@ class MainWindow(QtWidgets.QMainWindow):
         window.notificationsAction.setCheckable(True)
         window.notificationsAction.setChecked(True)
         window.notificationsAction.toggled.connect(self.setNotifications)
+        window.themeMenu = window.windowMenu.addMenu(getMessage("theme-menu-label"))
+        window.themeActions = {}
+        for themeName in theme.THEME_ORDER:
+            action = window.themeMenu.addAction(getMessage("theme-" + themeName + "-label"))
+            action.setCheckable(True)
+            action.setChecked(themeName == theme.chosenTheme())
+            action.triggered.connect(lambda checked=False, n=themeName: self.switchTheme(n))
+            window.themeActions[themeName] = action
         window.playbackAction = window.windowMenu.addAction(getMessage("playbackbuttons-menu-label"))
         window.playbackAction.setCheckable(True)
         window.playbackAction.triggered.connect(self.updatePlaybackFrameVisibility)
@@ -3130,6 +3256,8 @@ class MainWindow(QtWidgets.QMainWindow):
         window.uninstallAction.triggered.connect(self.uninstallApp)
         for action in (window.shortcutsAction, window.uninstallAction):
             action.setVisible(install.isPackaged())  # Only the single-file app has anything to install or remove
+        window.diagnosticsAction = window.helpMenu.addAction(getMessage("diagnostics-menu-label"))
+        window.diagnosticsAction.triggered.connect(self.copyDiagnostics)
         window.updateLogAction = window.helpMenu.addAction(getMessage("update-log-menu-label"))
         window.updateLogAction.triggered.connect(lambda checked=False: self.showUpdateLog())
 
@@ -3241,6 +3369,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def automaticUpdateCheck(self):
         currentDateTimeValue = QDateTime.currentDateTime()
         privateUpdates = bool(self._syncplayClient.privateUpdateRepo())  # Builds that update from GitHub always check
+        try:  # An update that was downloaded earlier and not yet installed: offer it right away
+            staged = updater.stagedBuild(updater.appFolder())
+            if privateUpdates and staged > BUILD:
+                self._showUpdateReady("Build {}".format(staged))
+        except Exception:
+            pass
         if not self.config['checkForUpdatesAutomatically'] and not privateUpdates:
             return
         frequency = constants.PRIVATE_UPDATE_CHECK_FREQUENCY if privateUpdates else constants.AUTOMATIC_UPDATE_CHECK_FREQUENCY
@@ -3278,8 +3412,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
             if userInitiated:
                 self._installPrivateUpdate(release)  # They clicked Update: no questions, just do it
-            else:  # Startup check: never interrupt with a popup
-                self.showMessage(getMessage("private-update-available-chat").format(release.name))
+            else:  # Startup check: never interrupt with a popup; fetch it quietly and offer a restart
+                self._downloadUpdateQuietly(release)
 
         def failed(failure):
             reason = str(failure.value) if failure.check(updater.UpdateError) else getMessage("subtitle-search-failed-error")
@@ -3290,6 +3424,38 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.showDebugMessage(message)
 
         client.checkPrivateUpdate().addCallbacks(found, failed)
+
+    def _downloadUpdateQuietly(self, release):
+        """Download and stage the update in the background, then show a slim bar offering to restart. Nothing is
+        interrupted; if you ignore the bar the update is installed the next time the app starts."""
+        client = self._syncplayClient
+        appDir = updater.appFolder()
+        if updater.stagedBuild(appDir) >= release.build:
+            self._showUpdateReady(release.name)
+            return
+        if self._updateDownloading:
+            return
+        self._updateDownloading = True
+
+        def staged(count):
+            self._updateDownloading = False
+            self._showUpdateReady(release.name)
+
+        def failed(failure):
+            self._updateDownloading = False
+            self.showDebugMessage("Background update download failed: {}".format(failure.getErrorMessage()))
+
+        client.installPrivateUpdate(release, None).addCallbacks(staged, failed)
+
+    def _showUpdateReady(self, name):
+        self.updateBarLabel.setText(getMessage("update-bar-ready").format(name))
+        self.updateBar.show()
+
+    def restartForUpdate(self):
+        try:
+            self._syncplayClient.restartSyncplay()
+        except OSError:
+            QtWidgets.QMessageBox.information(self, branding.NAME, getMessage("private-update-restart-manually"))
 
     def _installPrivateUpdate(self, release):
         progress = QtWidgets.QProgressDialog(getMessage("private-update-installing").format(release.name), None, 0, 100, self)
