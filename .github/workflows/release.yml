@@ -1,0 +1,51 @@
+name: Publish release
+
+# Push a tag like v26 and this builds the update zip for build 26 and publishes it as a release,
+# which is what the in-app Update looks for. The release notes come from syncplay/CHANGELOG.md.
+on:
+  push:
+    tags:
+      - "v[0-9]*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build the update zip
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          build="${TAG#v}"
+          case "$build" in ''|*[!0-9]*) echo "Tag must look like v26"; exit 1;; esac
+          python tools/make-release.py --build "$build" --out dist
+          mv "dist/Syncplay-Marquee-v${build}.zip" "dist/marquee-v${build}.zip"
+          echo "BUILD=$build" >> "$GITHUB_ENV"
+
+      - name: Write the release notes
+        run: |
+          python - <<'PY'
+          import hashlib, os, sys
+          sys.path.insert(0, ".")
+          from syncplay import changelog
+          build = int(os.environ["BUILD"])
+          entry = next((e for e in changelog.load() if e[0] == build), None)
+          lines = ["- " + b for b in entry[2]] if entry else ["Build %d" % build]
+          digest = hashlib.sha256(open("dist/marquee-v%d.zip" % build, "rb").read()).hexdigest()
+          open("notes.md", "w", encoding="utf-8").write("\n".join(lines) + "\n\nsha256: " + digest + "\n")
+          PY
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" "dist/marquee-v${BUILD}.zip" --title "Build ${BUILD}" --notes-file notes.md --verify-tag
