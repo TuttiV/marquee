@@ -1,0 +1,37 @@
+SYNCPLAY - SUBTITLE PICKER + ALWAYS READY EDITION
+==================================================
+
+QUICK START
+1. Install Python 3.9 or newer (Windows: python.org, tick "Add python.exe to PATH") and VLC (or mpv).
+2. Windows: double-click Syncplay.exe (no black window after the first-time setup).
+   (Run Syncplay.bat still works as a fallback.)   macOS/Linux: run  bash run-syncplay.sh
+   The first launch installs what it needs (about a minute, in a small setup window), then Syncplay opens.
+3. In the first-run window pick your player (VLC), a server, your name and a room, then Start.
+
+TRY THE NEW THINGS
+- Always ready:   the "Always ready" button next to the big ready button (also Window menu, or type /ar).
+- Subtitles:      open a video, then Subtitles > Find subtitles (Ctrl+Shift+S).
+                  It searches straight away with no account. Double-click a result to use it.
+                  Tick "Load for everyone in the room" to load it for everyone.
+- Optional:       Account... in that dialog lets you add your own free OpenSubtitles API key
+                  (opensubtitles.com/consumers) for exact file matches and more results.
+- TorBox:        File > My TorBox library (Ctrl+Shift+T). Paste your own TorBox API key once, then search
+                  and filter what's already in your account and play it for you or the room.
+- Copy invite:    the "Copy invite" chip copies server/port/room to send to friends.
+
+SUBTITLES FOR EVERYONE IN THE ROOM (no server of your own needed)
+Everyone who should get the subtitle just needs to run this edition and be in the same room, on ANY
+normal Syncplay server (for example the public ones). When you pick a subtitle, your Syncplay posts a short
+chat line naming it; everyone else's Syncplay recognises that line, downloads the same subtitle
+itself and loads it. People on stock Syncplay will just see the chat line.
+If you do run the bundled server, the subtitle file is relayed through it instead.
+Always ready, the new look and the invite button work on any server.
+
+If Syncplay does not open, look in syncplay.log (next to these files) or run
+"Run Syncplay (show console for troubleshooting).bat" to see what it prints.
+Delete the ".venv" folder to reset the setup. Your Syncplay settings live in your user folder as usual.
+
+ABOUT Syncplay.exe
+It is a small launcher (source in the launcher folder; the program folder holds the script it starts). It is not signed, so Windows SmartScreen may say
+"Windows protected your PC" the first time: choose "More info" then "Run anyway". It still needs Python
+installed (the first-run setup uses it); it just replaces the .bat so nothing black opens.
