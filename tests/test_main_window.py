@@ -178,14 +178,39 @@ class OneClickUpdateTests(unittest.TestCase):
         for mock in self.box.values():
             mock.assert_not_called()
 
-    def test_the_startup_check_only_mentions_the_update_in_chat(self):
+    def test_the_startup_check_downloads_quietly_then_offers_a_restart_without_popups(self):
         self.client.checkPrivateUpdate.return_value = defer.succeed(self.release(updater.BUILD + 1))
+        self.assertTrue(self.window.updateBar.isHidden())
         self.window.checkForUpdates(userInitiated=False)
-        self.client.installPrivateUpdate.assert_not_called()
-        self.client.restartSyncplay.assert_not_called()
-        self.assertIn("Build {}".format(updater.BUILD + 1), self.window.showMessage.call_args[0][0])
+        self.client.installPrivateUpdate.assert_called_once()
+        self.client.restartSyncplay.assert_not_called()  # Never restarts on its own
+        self.assertFalse(self.window.updateBar.isHidden())
+        self.assertIn("Build {}".format(updater.BUILD + 1), self.window.updateBarLabel.text())
         for mock in self.box.values():
             mock.assert_not_called()
+        self.window.updateLaterButton.click()
+        self.assertTrue(self.window.updateBar.isHidden())
+        self.window.updateRestartButton.click()
+        self.client.restartSyncplay.assert_called_once()
+
+    def test_a_failed_quiet_download_shows_nothing_and_can_be_retried(self):
+        self.client.checkPrivateUpdate.return_value = defer.succeed(self.release(updater.BUILD + 1))
+        self.client.installPrivateUpdate.return_value = defer.fail(updater.UpdateError("The download was corrupted."))
+        self.window.checkForUpdates(userInitiated=False)
+        self.assertTrue(self.window.updateBar.isHidden())
+        for mock in self.box.values():
+            mock.assert_not_called()
+        self.client.installPrivateUpdate.return_value = defer.succeed(5)
+        self.client.checkPrivateUpdate.return_value = defer.succeed(self.release(updater.BUILD + 1))
+        self.window.checkForUpdates(userInitiated=False)
+        self.assertFalse(self.window.updateBar.isHidden())
+
+    def test_an_update_already_downloaded_is_not_downloaded_again(self):
+        self.client.checkPrivateUpdate.return_value = defer.succeed(self.release(updater.BUILD + 1))
+        with patch.object(updater, "stagedBuild", return_value=updater.BUILD + 1):
+            self.window.checkForUpdates(userInitiated=False)
+        self.client.installPrivateUpdate.assert_not_called()
+        self.assertFalse(self.window.updateBar.isHidden())
 
     def test_up_to_date_says_so_and_does_not_install(self):
         self.client.checkPrivateUpdate.return_value = defer.succeed(self.release(updater.BUILD))

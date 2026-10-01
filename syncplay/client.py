@@ -38,7 +38,7 @@ try:
 except:
     pass
 
-from syncplay import subpresence, utils, constants, opensubtitles, secrets, subtitles, torbox, updater, version, synccheck, resume
+from syncplay import diagnostics, subdelay, subpresence, utils, constants, opensubtitles, secrets, subtitles, torbox, updater, version, synccheck, resume
 from syncplay.constants import PRIVACY_SENDHASHED_MODE, PRIVACY_DONTSEND_MODE, \
     PRIVACY_HIDDENFILENAME
 from syncplay.messages import getMissingStrings, getMessage, isNoOSDMessage
@@ -675,8 +675,87 @@ class SyncplayClient(object):
 
     def announceSubtitleToNewcomer(self):
         """Someone just joined: say once, a little later and at a random moment, which subtitle we have on."""
-        if self._mySubtitle and getattr(self, "_running", False):
-            reactor.callLater(1.5 + random.random() * 2.5, self.announceMySubtitle)
+        if (self._mySubtitle or self._subDelay) and getattr(self, "_running", False):
+            reactor.callLater(1.5 + random.random() * 2.5, self._announceMyState)
+
+    # --- Reopen player ---------------------------------------------------------------------------------------------
+
+    def reopenPlayer(self):
+        """Restart the app with the same video and room (for a player that froze or crashed). Raises OSError if there is
+        nothing to reopen or the new copy can't be started."""
+        file_ = self.userlist.currentUser.file if getattr(self, "userlist", None) else None
+        path = (file_.get("path") or file_.get("name")) if file_ else None
+        if not path:
+            raise OSError("No video is open.")
+        self._saveResume()
+        argv = [sys.argv[0], path, "-r", self.getRoom()]
+        appDir = os.path.dirname(os.path.dirname(os.path.abspath(updater.__file__)))
+        updater.relaunch(os.getpid(), sys.executable, argv, appDir)
+        self.stop()
+
+    # --- Diagnostics -----------------------------------------------------------------------------------------------
+
+    def diagnosticsText(self):
+        """Plain text for Help > Copy diagnostics (no passwords, keys, room or user names)."""
+        config = getattr(self, "_config", {}) or {}
+        appDir = updater.appFolder()
+        try:
+            users = 1 + sum(1 for user in self.userlist._users.values() if user.room == self.userlist.currentUser.room)
+        except Exception:
+            users = "unknown"
+        file_ = self.userlist.currentUser.file if getattr(self, "userlist", None) else None
+        from syncplay.ui import theme
+        facts = [("Build", updater.BUILD), ("Version", version),
+                 ("Server", "{}:{}".format(config.get("host"), config.get("port")) if config.get("host") else "not set"),
+                 ("Connected", "yes" if self._protocol and getattr(self._protocol, "logged", False) else "no"),
+                 ("Server version", getattr(self, "serverVersion", "unknown")),
+                 ("People in room", users), ("Player", os.path.basename(str(config.get("playerPath") or "")) or "none"),
+                 ("Video open", "yes" if file_ else "no"), ("Subtitle on", "yes" if self._mySubtitle else "no"),
+                 ("Subtitle delay", subdelay.describe(self._subDelay)), ("Theme", theme.chosenTheme()),
+                 ("Update waiting", updater.stagedBuild(appDir) or "none"), ("Blocked build", updater.blockedBuild(appDir) or "none")]
+        facts += diagnostics.systemFacts()
+        secrets = [config.get(k) for k in ("password", "openSubtitlesApiKey", "openSubtitlesPassword", "torboxApiKey", "name", "room")]
+        return diagnostics.report(facts, diagnostics.tailOfLog(appDir), secrets)
+
+    # --- Shared subtitle delay ---------------------------------------------------------------------------------------
+
+    _subDelay = 0.0
+
+    def subtitleDelay(self):
+        return self._subDelay
+
+    def handleSubtitleDelayChat(self, username, text):
+        """True if this chat line was a "[subdelay] ..." change (applied here and hidden from the chat)."""
+        if not text or text[:10] != "[subdelay]":
+            return False
+        value = subdelay.parse(text)
+        if value is False:
+            return False
+        me = self.userlist.currentUser.username if getattr(self, "userlist", None) else None
+        if username and username != me:
+            self._applySubtitleDelay(value)
+            self.ui.showMessage(getMessage("subdelay-changed-by").format(username, subdelay.describe(value)))
+        return True
+
+    def _applySubtitleDelay(self, value):
+        self._subDelay = subdelay.clamp(value)
+        applied = bool(self._player and self._player.setSubtitleDelay(self._subDelay))
+        ui = getattr(self, "ui", None)
+        if ui and hasattr(ui, "subtitleDelayChanged"):
+            ui.subtitleDelayChanged(self._subDelay, applied)
+        return applied
+
+    def changeSharedSubtitleDelay(self, seconds=None, by=None):
+        """Set the delay (or move it by `by` seconds), apply it here and tell the room."""
+        target = self._subDelay + by if seconds is None else seconds
+        value = subdelay.clamp(target)
+        applied = self._applySubtitleDelay(value)
+        if getattr(self, "_protocol", None) and getattr(self._protocol, "logged", False) and getattr(self, "serverVersion", "0.0.0") != "0.0.0" \
+                and self.serverFeatures.get("chat"):
+            self.sendChat(subdelay.line(value))
+        if not applied:
+            self.ui.showMessage(getMessage("subdelay-unsupported"))
+        return value
 
     def subtitleFor(self, username):
         """The subtitle a person is known to be using, or None."""
@@ -693,6 +772,13 @@ class SyncplayClient(object):
             ui = getattr(self, "ui", None)
             if ui and hasattr(ui, "subtitleInfoChanged"):
                 ui.subtitleInfoChanged()
+
+    def _announceMyState(self):
+        if self._mySubtitle:
+            self.announceMySubtitle()
+        if self._subDelay and getattr(self, "_protocol", None) and getattr(self._protocol, "logged", False) \
+                and getattr(self, "serverVersion", "0.0.0") != "0.0.0" and self.serverFeatures.get("chat"):
+            self.sendChat(subdelay.line(self._subDelay))
 
     def announceMySubtitle(self):
         """Tell the room which subtitle is on (only when there is one, or when it just stopped)."""
@@ -804,6 +890,8 @@ class SyncplayClient(object):
         self.userlist.currentUser.setFile(filename, duration, size, path)
         self.sendFile()
         self._setMySubtitle(None)  # A new video starts without the last one's subtitle
+        if self._subDelay:
+            self._applySubtitleDelay(0.0)
         self._scheduleAutoSubtitles(filename)
         if not getattr(self, "_resumeLoopStarted", False):
             self._resumeLoopStarted = True
@@ -2469,6 +2557,15 @@ class UiManager(object):
         """Something worth a desktop notification (joined, left, mention); only the graphical window does anything with it."""
         if hasattr(self.__ui, "notifyEvent"):
             self.__ui.notifyEvent(kind, text)
+
+    def subtitleInfoChanged(self):
+        """Somebody's subtitle changed: the people table redraws (graphical window only)."""
+        if hasattr(self.__ui, "subtitleInfoChanged"):
+            self.__ui.subtitleInfoChanged()
+
+    def subtitleDelayChanged(self, seconds, applied):
+        if hasattr(self.__ui, "subtitleDelayChanged"):
+            self.__ui.subtitleDelayChanged(seconds, applied)
 
     def connectionLost(self):
         """The connection dropped and the client is trying to get it back (only the graphical window shows this)."""

@@ -208,6 +208,18 @@ def hasStagedUpdate(appDir):
     return os.path.isfile(os.path.join(appDir, STAGING, READY_MARKER))
 
 
+def stagedBuild(appDir):
+    """The build number of the update waiting in the staging folder, or 0 if there isn't a complete one."""
+    if not hasStagedUpdate(appDir):
+        return 0
+    try:
+        with open(os.path.join(appDir, STAGING, "syncplay", "private_build.py"), encoding="utf-8") as f:
+            match = re.search(r"^BUILD\s*=\s*(\d+)", f.read(), re.M)
+        return int(match.group(1)) if match else 0
+    except (OSError, ValueError):
+        return 0
+
+
 def brokenPythonFile(root):
     """The first .py/.pyw file under root that isn't valid Python (a typo shipped by mistake must never be installed)."""
     for folder, _, files in os.walk(root):

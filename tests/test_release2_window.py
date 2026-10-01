@@ -38,6 +38,20 @@ class WindowTests(unittest.TestCase):
         self.window.resize(MainWindow.NARROW_WIDTH + 200, 700)
         self.app.processEvents()
 
+    def test_the_theme_menu_lists_every_theme_and_switching_changes_the_look_and_the_ticks(self):
+        from syncplay.ui import theme
+        self.addCleanup(theme.chooseTheme, "system", False)
+        self.addCleanup(theme.applyApplicationTheme, self.app)
+        self.assertEqual(list(self.window.themeActions), list(theme.THEME_ORDER))
+        self.window.themeActions["cinema"].trigger()
+        self.assertTrue(self.window._dark)
+        self.assertIn(theme.CINEMA["accent"], self.app.styleSheet())
+        self.assertTrue(self.window.themeActions["cinema"].isChecked())
+        self.assertFalse(self.window.themeActions["system"].isChecked())
+        self.window.themeActions["sand"].trigger()
+        self.assertFalse(self.window._dark)
+        self.window.grab()  # Paints in the new colours without error
+
     # --- look
     def test_tray_menu_items_have_icons(self):
         menu = self.window._buildTrayMenu()
@@ -174,3 +188,44 @@ class WindowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+@unittest.skipUnless(HAVE_QT, "Qt not available")
+class ReadyButtonTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def test_state_changes_glide_and_always_end_on_the_right_look(self):
+        from syncplay.ui.panels import ReadyButton
+        button = ReadyButton("Not ready")
+        button.setCheckable(True)
+        self.addCleanup(button.close)
+        button.resize(300, 40)
+        button.show()
+        self.app.processEvents()
+        button.grab()
+        self.assertEqual(button._t, 0.0)
+        button.blockSignals(True)  # The room changes it without a click
+        button.setChecked(True)
+        button.blockSignals(False)
+        button.grab()
+        self.assertTrue(button.animating())
+        button._animation.setCurrentTime(button.DURATION)
+        self.assertEqual(button._t, 1.0)
+        pixmap = button.grab()  # Fully ready: paints without error
+        self.assertFalse(pixmap.isNull())
+        button.setChecked(False)
+        button.grab()
+        button._animation.setCurrentTime(button.DURATION)
+        self.assertEqual(button._t, 0.0)
+
+    def test_nothing_animates_before_the_button_is_on_screen(self):
+        from syncplay.ui.panels import ReadyButton
+        button = ReadyButton("x")
+        button.setCheckable(True)
+        button.setChecked(True)
+        button.grab()
+        self.assertFalse(button.animating())
+        self.assertEqual(button._t, 1.0)

@@ -248,6 +248,17 @@ class StartWindowTests(unittest.TestCase):
         self.assertTrue(lobby)
         self.assertEqual(result["skipStartWindow"], "False")
 
+    def test_an_invite_link_with_a_player_and_name_joins_without_the_start_window(self):
+        link = invite.make("example.org", 9000, "room-quick")
+        lobby, result = self.run_getter("", link)
+        self.assertFalse(lobby)
+        self.assertEqual((result["skipStartWindow"], result["startWindowAsked"]), ("True", "True"))
+
+    def test_the_flag_still_brings_the_window_back_for_a_link(self):
+        link = invite.make("example.org", 9000, "room-quick")
+        lobby, _ = self.run_getter("", link, "--force-gui-prompt")
+        self.assertTrue(lobby)
+
     def test_the_first_setup_turns_skipping_on_and_says_so_once(self):
         lobby, result = self.run_getter("")
         self.assertTrue(lobby)
