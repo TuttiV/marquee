@@ -1,9 +1,18 @@
 name: Publish release
 
-# Push a tag like v26 and this builds the update zip for build 26 and publishes it as a release,
-# which is what the in-app Update looks for. The release notes come from syncplay/CHANGELOG.md.
+# Publishes the update zip that the in-app Update looks for.
+#
+# Two ways to start it:
+#   - change the number in release-build.txt on main (for example to 26), or
+#   - push a tag like v26.
+# The release is named "Build N", the zip is attached as marquee-vN.zip, and the notes come from syncplay/CHANGELOG.md.
+# A build number that already has a release is skipped, so re-running is harmless.
 on:
   push:
+    branches:
+      - main
+    paths:
+      - release-build.txt
     tags:
       - "v[0-9]*"
 
@@ -20,17 +29,28 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Build the update zip
+      - name: Work out the build number
         env:
+          REF_TYPE: ${{ github.ref_type }}
           TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          build="${TAG#v}"
-          case "$build" in ''|*[!0-9]*) echo "Tag must look like v26"; exit 1;; esac
-          python tools/make-release.py --build "$build" --out dist
-          mv "dist/Syncplay-Marquee-v${build}.zip" "dist/marquee-v${build}.zip"
+          if [ "$REF_TYPE" = "tag" ]; then build="${TAG#v}"; else build="$(tr -d '[:space:]' < release-build.txt)"; fi
+          case "$build" in ''|*[!0-9]*) echo "Build number must be digits, got: $build"; exit 1;; esac
+          if gh release view "v${build}" >/dev/null 2>&1; then
+            echo "Build ${build} already has a release; nothing to do."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
           echo "BUILD=$build" >> "$GITHUB_ENV"
 
+      - name: Build the update zip
+        if: env.SKIP != '1'
+        run: |
+          python tools/make-release.py --build "$BUILD" --out dist
+          mv "dist/Syncplay-Marquee-v${BUILD}.zip" "dist/marquee-v${BUILD}.zip"
+
       - name: Write the release notes
+        if: env.SKIP != '1'
         run: |
           python - <<'PY'
           import hashlib, os, sys
@@ -44,8 +64,8 @@ jobs:
           PY
 
       - name: Publish the release
+        if: env.SKIP != '1'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" "dist/marquee-v${BUILD}.zip" --title "Build ${BUILD}" --notes-file notes.md --verify-tag
+          gh release create "v${BUILD}" "dist/marquee-v${BUILD}.zip" --title "Build ${BUILD}" --notes-file notes.md --target "$GITHUB_SHA"
