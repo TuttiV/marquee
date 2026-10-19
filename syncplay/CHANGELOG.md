@@ -1,3 +1,7 @@
+## Build 28 - Chat no longer knocks people out of the room
+- Fixed: a chat message could make the other person's app drop off the server and come straight back ("has left", then "has joined"). It happened when their video player wasn't connected yet.
+- More generally, if the app can't handle one message from the server it now writes the error to its log and stays connected, instead of reconnecting.
+
 ## Build 27 - Linux, and a real install window
 - New install window on first start: pick the install folder (Browse...) and tick the shortcuts you want: Start menu (or the Linux applications menu) and desktop, each on its own. Help > Install and shortcuts changes them later or moves the app to another folder.
 - Linux version (for Linux Mint, Ubuntu and similar 64-bit systems): a self-contained download with everything included; you only need mpv or VLC. Install it with the same window; invite links, updates and uninstall work as on Windows.
