@@ -528,8 +528,8 @@ class VlcPlayer(BasePlayer):
                 self.__process = subprocess.Popen(call, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
             self.timeVLCLaunched = time.time()
             if self._shouldListenForSTDOUT():
-                for line in iter(self.__process.stderr.readline, ''):
-                    line = line.decode('utf-8')
+                for line in iter(self.__process.stderr.readline, b''):  # b'': the pipe returns bytes, so this is the end
+                    line = line.decode('utf-8', errors='replace')
                     self.vlcHasResponded = True
                     self.timeVLCLaunched = None
                     if "[syncplay]" in line:
@@ -560,8 +560,8 @@ class VlcPlayer(BasePlayer):
 
         def handle_vlcoutput(self):
             out = self.__process.stderr
-            for line in iter(out.readline, ''):
-                line = line.decode('utf-8')
+            for line in iter(out.readline, b''):
+                line = line.decode('utf-8', errors='replace')
                 if '[syncplay] core interface debug: removing module' in line:
                     self.__playerController.drop()
                     break

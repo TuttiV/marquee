@@ -815,7 +815,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.config.get("loadPlaylistFromFile") and self._lastPlaylistFile and self.config.get("configDir"):
             self._rememberPlaylistFile(self._lastPlaylistFile)
         self._startInstanceWatch()
-        QtCore.QTimer.singleShot(2500, self._offerShortcuts)
         self._progressTimer = QtCore.QTimer(self)
         self._progressTimer.timeout.connect(self._tickProgress)
         self._progressTimer.start(500)
@@ -1139,7 +1138,7 @@ class MainWindow(QtWidgets.QMainWindow):
         ("openAction", "folder"), ("openPlaylistAction", "list"), ("reloadPlaylistAction", "refresh"), ("torboxAction", "library"),
         ("connectionSettingsAction", "tune"), ("skipStartAction", "skip"), ("reconnectAction", "refresh"), ("exitAction", "power"),
         ("syncCheckAction", "clock"), ("shareSubtitleFileAction", "plus"), ("loadSharedSubtitleAction", "link"),
-        ("editroomsAction", "list"), ("updateSourceAction", "link"), ("updateLogAction", "list"), ("shortcutsAction", "plus"),
+        ("editroomsAction", "list"), ("updateSourceAction", "link"), ("updateLogAction", "list"), ("shortcutsAction", "download"),
         ("uninstallAction", "trash"), ("userguideAction", "help"), ("updateAction", "download"),
         ("reopenPlayerAction", "refresh"), ("diagnosticsAction", "info"), ("subDelayEarlierAction", "chevron"), ("subDelayLaterAction", "chevron"),
         ("subDelayResetAction", "undo"),
@@ -2282,33 +2281,27 @@ class MainWindow(QtWidgets.QMainWindow):
             self.joinRoom(link.room)
             self.showMessage(getMessage("invite-joined-notification").format(link.room))
 
-    def addShortcuts(self, announce=False):
-        """Start menu and desktop shortcuts for the app."""
-        try:
-            for kind in install.KINDS:
-                install.createShortcut(kind)
-        except OSError as e:
-            QtWidgets.QMessageBox.warning(self, branding.NAME, str(e))
-            return False
-        if announce:
-            self.showMessage(getMessage("shortcuts-added-notification"))
-        return True
-
-    def _offerShortcuts(self):
-        """Once, shortly after the first start of the single-file app: offer shortcuts (whatever the answer, never ask again)."""
-        configDir = self.config.get("configDir")
-        if not configDir or not install.isPackaged() or secrets.load(install.FLAG, configDir):
+    def openInstallDialog(self):
+        """Help > Install and shortcuts: move the app to another folder and/or change its shortcuts."""
+        from syncplay.ui.InstallDialog import InstallDialog
+        root = install.rootFolder()
+        if not root:
             return
-        try:
-            secrets.save(install.FLAG, "yes", configDir)
-        except OSError:
-            return
-        box = QtWidgets.QMessageBox(self)
-        box.setWindowTitle(branding.NAME)
-        box.setText(getMessage("shortcuts-offer"))
-        box.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
-        if box.exec_() == QtWidgets.QMessageBox.Yes:
-            self.addShortcuts(True)
+        dialog = InstallDialog(root, os.environ.get(install.EXE_ENV), True, self, firstRun=False)
+        dialog.exec_()
+        if dialog.outcome == "here":
+            self.showMessage(getMessage("install-done-notification"))
+        elif dialog.outcome == "moved":
+            self.showMessage(getMessage("install-moved-restarting"))
+            try:
+                install.startInstalled(dialog.chosenRoot, [])
+                if os.name == "nt":
+                    install.removeFolderLater(root)
+            except (OSError, ValueError) as e:
+                QtWidgets.QMessageBox.warning(self, branding.NAME, getMessage("install-failed").format(e))
+                return
+            if self._syncplayClient:
+                self._syncplayClient.stop()
 
     def uninstallApp(self):
         """Remove the app from this PC (its own folder, shortcuts and link handler), optionally with the person's settings."""
@@ -2354,13 +2347,18 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.config.get("configDir"):
             return
         try:
-            available = inviteLinks.handlerAvailable()
-            self.inviteLinksAction.setVisible(available)  # Only meaningful for the Windows single-file app
+            linuxRoot = install.rootFolder() if (install.LINUX and install.isPackaged()) else None
+            available = bool(linuxRoot) or inviteLinks.handlerAvailable()
+            self.inviteLinksAction.setVisible(available)  # Only meaningful for the installed app
             off = secrets.load(inviteLinks.SETTING, self.config.get("configDir")) == "off"
             self.inviteLinksAction.blockSignals(True)
             self.inviteLinksAction.setChecked(not off)
             self.inviteLinksAction.blockSignals(False)
             if not available or off:
+                return
+            if linuxRoot:
+                if not install.linuxLinksRegistered(linuxRoot):
+                    install.registerLinuxLinks(linuxRoot)
                 return
             command = inviteLinks.handlerCommand()
             if not inviteLinks.isHandlerRegistered(command):
@@ -2371,7 +2369,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def toggleInviteLinks(self, enabled):
         try:
             secrets.save(inviteLinks.SETTING, "on" if enabled else "off", self.config.get("configDir"))
-            if enabled:
+            if install.LINUX and install.isPackaged():
+                if enabled:
+                    install.registerLinuxLinks(install.rootFolder())
+                else:
+                    install.removeLinuxEntry("links")
+            elif enabled:
                 inviteLinks.registerHandler(inviteLinks.handlerCommand(), os.path.join(resourcespath, "icon.ico"))
             else:
                 inviteLinks.unregisterHandler()
@@ -3215,7 +3218,8 @@ class MainWindow(QtWidgets.QMainWindow):
         window.themeMenu = window.windowMenu.addMenu(getMessage("theme-menu-label"))
         window.themeActions = {}
         for themeName in theme.THEME_ORDER:
-            action = window.themeMenu.addAction(getMessage("theme-" + themeName + "-label"))
+            key = "theme-system-linux-label" if (themeName == "system" and not isWindows()) else "theme-" + themeName + "-label"
+            action = window.themeMenu.addAction(getMessage(key))
             action.setCheckable(True)
             action.setChecked(themeName == theme.chosenTheme())
             action.triggered.connect(lambda checked=False, n=themeName: self.switchTheme(n))
@@ -3250,8 +3254,8 @@ class MainWindow(QtWidgets.QMainWindow):
         window.inviteLinksAction.setCheckable(True)
         window.inviteLinksAction.setChecked(True)
         window.inviteLinksAction.toggled.connect(self.toggleInviteLinks)
-        window.shortcutsAction = window.helpMenu.addAction(getMessage("shortcuts-menu-label"))
-        window.shortcutsAction.triggered.connect(lambda checked=False: self.addShortcuts(True))
+        window.shortcutsAction = window.helpMenu.addAction(getMessage("install-menu-label"))
+        window.shortcutsAction.triggered.connect(lambda checked=False: self.openInstallDialog())
         window.uninstallAction = window.helpMenu.addAction(getMessage("uninstall-menu-label"))
         window.uninstallAction.triggered.connect(self.uninstallApp)
         for action in (window.shortcutsAction, window.uninstallAction):
