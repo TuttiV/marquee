@@ -7,13 +7,15 @@ name: Publish release
 #   - push a tag like v26.
 # The release is named "Build N", the zip is attached as marquee-vN.zip, and the notes come from syncplay/CHANGELOG.md.
 # The Linux download (marquee-linux-x86_64-vN.tar.xz) is built and attached too; if that build fails the zip still ships.
-# A build number that already has a release is skipped, so re-running is harmless.
+# A build number that already has a release is skipped, so re-running is harmless. The one exception: a release that
+# is missing its Linux download gets it added (changing this file on main also starts a run, to fill that in).
 on:
   push:
     branches:
       - main
     paths:
       - release-build.txt
+      - .github/workflows/release.yml
     tags:
       - "v[0-9]*"
 
@@ -38,29 +40,39 @@ jobs:
         run: |
           if [ "$REF_TYPE" = "tag" ]; then build="${TAG#v}"; else build="$(tr -d '[:space:]' < release-build.txt)"; fi
           case "$build" in ''|*[!0-9]*) echo "Build number must be digits, got: $build"; exit 1;; esac
-          if gh release view "v${build}" >/dev/null 2>&1; then
-            echo "Build ${build} already has a release; nothing to do."
-            echo "SKIP=1" >> "$GITHUB_ENV"
+          if gh release view "v${build}" --json assets --jq '.assets[].name' > assets.txt 2>/dev/null; then
+            if grep -qx "marquee-linux-x86_64-v${build}.tar.xz" assets.txt; then
+              echo "Build ${build} already has a release; nothing to do."
+              echo "SKIP=1" >> "$GITHUB_ENV"
+            else
+              echo "Build ${build} is released without the Linux download; adding it."
+              echo "LINUX_ONLY=1" >> "$GITHUB_ENV"
+            fi
           fi
           echo "BUILD=$build" >> "$GITHUB_ENV"
 
       - name: Build the update zip
-        if: env.SKIP != '1'
+        if: env.SKIP != '1' && env.LINUX_ONLY != '1'
         run: |
           python tools/make-release.py --build "$BUILD" --out dist
           mv "dist/Syncplay-Marquee-v${BUILD}.zip" "dist/marquee-v${BUILD}.zip"
 
+      # The builder test-imports Qt, which needs the graphics libraries every Linux desktop has but this server lacks.
       - name: Build the Linux download
         if: env.SKIP != '1'
-        continue-on-error: true
+        continue-on-error: ${{ env.LINUX_ONLY != '1' }}
         env:
           REPO: ${{ github.repository }}
         run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends libegl1 libgl1 libfontconfig1 libfreetype6 libxkbcommon0 \
+            libdbus-1-3 libx11-6 libx11-xcb1 libxcb1 libxcb-glx0 libxcb-randr0 libxcb-render0 libxcb-shape0 libxcb-shm0 \
+            libxcb-sync1 libxcb-xfixes0
           printf '{"updateRepo": "%s"}\n' "$REPO" > linux-defaults.json
           python tools/make-linux.py --build "$BUILD" --defaults linux-defaults.json --out dist
 
       - name: Write the release notes
-        if: env.SKIP != '1'
+        if: env.SKIP != '1' && env.LINUX_ONLY != '1'
         run: |
           python - <<'PY'
           import hashlib, os, sys
@@ -79,7 +91,7 @@ jobs:
           PY
 
       - name: Publish the release
-        if: env.SKIP != '1'
+        if: env.SKIP != '1' && env.LINUX_ONLY != '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -87,3 +99,14 @@ jobs:
           linux="dist/marquee-linux-x86_64-v${BUILD}.tar.xz"
           if [ -f "$linux" ]; then assets+=("$linux"); fi
           gh release create "v${BUILD}" "${assets[@]}" --title "Build ${BUILD}" --notes-file notes.md --target "$GITHUB_SHA"
+
+      - name: Add the Linux download to the existing release
+        if: env.LINUX_ONLY == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          linux="dist/marquee-linux-x86_64-v${BUILD}.tar.xz"
+          gh release upload "v${BUILD}" "$linux"
+          body="$(gh release view "v${BUILD}" --json body --jq .body)"
+          printf '%s\nLinux sha256: %s\n' "$body" "$(sha256sum "$linux" | cut -d' ' -f1)" > notes.md
+          gh release edit "v${BUILD}" --notes-file notes.md
