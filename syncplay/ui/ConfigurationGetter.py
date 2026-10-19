@@ -492,6 +492,45 @@ class ConfigurationGetter(object):
         if changed:
             parser.write(codecs.open(iniPath, "wb", "utf_8_sig"))
 
+    def _playerFound(self):
+        try:
+            if self._config['playerPath'] and utils.playerPathExists(self._config['playerPath']):
+                return True
+            return any(utils.playerPathExists(path) for path in PlayerFactory().getAvailablePlayerPaths())
+        except Exception:
+            return True  # Never warn about a missing player because the check itself failed
+
+    def _offerInstall(self):
+        """First start of the packaged app (Windows .exe or the Linux download): the install window, once. Returns True when
+        the app was copied to another folder and started from there (this copy should then just quit)."""
+        try:
+            from syncplay import install, secrets
+            configDir = self._config.get('configDir')
+            if not configDir or not install.isPackaged() or os.environ.get("MARQUEE_NO_INSTALL_OFFER"):
+                return False
+            if secrets.load(install.INSTALL_FLAG, configDir) or secrets.load(install.FLAG, configDir):
+                return False
+            secrets.save(install.INSTALL_FLAG, "yes", configDir)
+            from syncplay.vendor.Qt import QtWidgets
+            from syncplay.ui import theme
+            from syncplay.ui.InstallDialog import InstallDialog
+            theme.applyApplicationTheme(QtWidgets.QApplication.instance())
+            current = install.rootFolder()
+            suggested = install.targetRoot(install.defaultParent()) if install.LINUX else current
+            dialog = InstallDialog(current, os.environ.get(install.EXE_ENV), self._playerFound(), suggested=suggested)
+            dialog.exec_()
+            if dialog.outcome != "moved":
+                return False
+            if install.LINUX:
+                QtWidgets.QMessageBox.information(None, "Syncplay Marquee", getMessage("install-linux-done").format(dialog.chosenRoot, current))
+            install.startInstalled(dialog.chosenRoot, sys.argv[1:])
+            if os.name == "nt":
+                install.removeFolderLater(current)
+            return True
+        except Exception as e:
+            print("The install window couldn't finish: {}".format(e))
+            return False
+
     def _prepareQuickJoin(self):
         """Opening an invite link should just work: find a player and a name without asking. True when both are known
         (and so no start window is needed); False means the window is shown as usual."""
@@ -641,6 +680,8 @@ class ConfigurationGetter(object):
                 print(e)
                 print(getMessage("unable-import-gui-error"))
                 self._config['noGui'] = True
+        if not self._config['noGui'] and self._offerInstall():
+            sys.exit(0)  # The app was installed in another folder and that copy has started
         if self._config['file'] and self._config['file'][:2] == "--":
             self._config['playerArgs'].insert(0, self._config['file'])
             self._config['file'] = None

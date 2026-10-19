@@ -6,6 +6,7 @@ name: Publish release
 #   - change the number in release-build.txt on main (for example to 26), or
 #   - push a tag like v26.
 # The release is named "Build N", the zip is attached as marquee-vN.zip, and the notes come from syncplay/CHANGELOG.md.
+# The Linux download (marquee-linux-x86_64-vN.tar.xz) is built and attached too; if that build fails the zip still ships.
 # A build number that already has a release is skipped, so re-running is harmless.
 on:
   push:
@@ -49,6 +50,15 @@ jobs:
           python tools/make-release.py --build "$BUILD" --out dist
           mv "dist/Syncplay-Marquee-v${BUILD}.zip" "dist/marquee-v${BUILD}.zip"
 
+      - name: Build the Linux download
+        if: env.SKIP != '1'
+        continue-on-error: true
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          printf '{"updateRepo": "%s"}\n' "$REPO" > linux-defaults.json
+          python tools/make-linux.py --build "$BUILD" --defaults linux-defaults.json --out dist
+
       - name: Write the release notes
         if: env.SKIP != '1'
         run: |
@@ -59,8 +69,13 @@ jobs:
           build = int(os.environ["BUILD"])
           entry = next((e for e in changelog.load() if e[0] == build), None)
           lines = ["- " + b for b in entry[2]] if entry else ["Build %d" % build]
-          digest = hashlib.sha256(open("dist/marquee-v%d.zip" % build, "rb").read()).hexdigest()
-          open("notes.md", "w", encoding="utf-8").write("\n".join(lines) + "\n\nsha256: " + digest + "\n")
+          def sha(path):
+              return hashlib.sha256(open(path, "rb").read()).hexdigest()
+          sums = ["sha256: " + sha("dist/marquee-v%d.zip" % build)]
+          linux = "dist/marquee-linux-x86_64-v%d.tar.xz" % build
+          if os.path.isfile(linux):
+              sums.append("Linux sha256: " + sha(linux))
+          open("notes.md", "w", encoding="utf-8").write("\n".join(lines) + "\n\n" + "\n".join(sums) + "\n")
           PY
 
       - name: Publish the release
@@ -68,4 +83,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${BUILD}" "dist/marquee-v${BUILD}.zip" --title "Build ${BUILD}" --notes-file notes.md --target "$GITHUB_SHA"
+          assets=("dist/marquee-v${BUILD}.zip")
+          linux="dist/marquee-linux-x86_64-v${BUILD}.tar.xz"
+          if [ -f "$linux" ]; then assets+=("$linux"); fi
+          gh release create "v${BUILD}" "${assets[@]}" --title "Build ${BUILD}" --notes-file notes.md --target "$GITHUB_SHA"

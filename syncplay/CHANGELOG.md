@@ -1,3 +1,10 @@
+## Build 27 - Linux, and a real install window
+- New install window on first start: pick the install folder (Browse...) and tick the shortcuts you want: Start menu (or the Linux applications menu) and desktop, each on its own. Help > Install and shortcuts changes them later or moves the app to another folder.
+- Linux version (for Linux Mint, Ubuntu and similar 64-bit systems): a self-contained download with everything included; you only need mpv or VLC. Install it with the same window; invite links, updates and uninstall work as on Windows.
+- Window > Theme > Same as system now also follows a dark desktop on Linux.
+- Fixed: on Linux, if VLC closed before it was ready the app froze at full CPU.
+- Dialog buttons no longer show old-style icons on Linux.
+
 ## Build 26 - Themes, shared subtitle delay, emoji and a smoother start
 - Window > Theme: Same as Windows, Dark, Light and three new looks: Cinema (warm black and gold), Midnight (true black with cyan) and Sand (warm paper-like light). It switches instantly and is remembered.
 - Subtitles > earlier / later (Ctrl+Shift+[ and ]) move the subtitle delay for everyone using this app at once, in 0.1 s steps; a new video starts at zero. Works with mpv (VLC can't change it from outside and says so).

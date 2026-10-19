@@ -5,6 +5,9 @@
  * (showing a small progress window) and starts the app with pythonw.exe (no console). Later runs start straight away.
  * It contains its own small unzip (inflate) so it needs nothing from the system, not even Python.
  *
+ * The folder can be changed in the app's install window; the choice is kept in HKCU\Software\Syncplay Marquee (InstallDir)
+ * and read here, so every copy of the .exe starts the installed app. The app is told where this .exe is (MARQUEE_EXE) so
+ * the install window can put a copy of it in the install folder for the shortcuts.
  * Test hooks: MARQUEE_HOME overrides the install folder; MARQUEE_NO_LAUNCH=1 unpacks and exits without starting.
  * Build: x86_64-w64-mingw32-gcc -O2 -mwindows -municode -static stub.c stub.res.o -lcomctl32 (see tools/make-exe.py). */
 #ifndef UNICODE
@@ -114,6 +117,20 @@ static int extractZip(const uint8_t *zip, size_t size, const wchar_t *destDir, d
 
 /* ------------------------------------------------------------------------------------------------ files ---- */
 static int exists(const wchar_t *path) { DWORD a = GetFileAttributesW(path); return a != INVALID_FILE_ATTRIBUTES; }
+
+/* The install folder chosen in the app's install window (HKCU\Software\Syncplay Marquee, InstallDir), if any. */
+static int readInstallDir(wchar_t *out, DWORD chars) {
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Syncplay Marquee", 0, KEY_READ, &key) != ERROR_SUCCESS) return 0;
+    DWORD type = 0, bytes = (chars - 1) * sizeof(wchar_t);
+    LONG result = RegQueryValueExW(key, L"InstallDir", NULL, &type, (BYTE *)out, &bytes);
+    RegCloseKey(key);
+    if (result != ERROR_SUCCESS || type != REG_SZ || bytes < 4 * sizeof(wchar_t)) return 0;
+    out[bytes / sizeof(wchar_t)] = 0;
+    size_t n = wcslen(out);
+    while (n > 3 && (out[n - 1] == L'\\' || out[n - 1] == L'/')) out[--n] = 0;  /* No trailing slash (but keep "C:\\") */
+    return n >= 3 && out[1] == L':';  /* Only a full path with a drive letter */
+}
 
 static uint8_t *readRange(HANDLE file, uint64_t offset, uint64_t size) {
     uint8_t *buffer = (uint8_t *)VirtualAlloc(NULL, size ? size : 1, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
@@ -379,9 +396,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR arguments, in
     wchar_t base[2048];
     DWORD len = GetEnvironmentVariableW(L"MARQUEE_HOME", base, 2048);
     if (len == 0 || len >= 2048) {
-        len = GetEnvironmentVariableW(L"LOCALAPPDATA", base, 2048);
-        if (len == 0 || len >= 2048) { MessageBoxW(NULL, L"Could not find your local app data folder.", TITLE, MB_ICONERROR); return 1; }
-        _snwprintf(setup.root, 2048, L"%ls\\Syncplay Marquee", base);
+        if (readInstallDir(setup.root, 2048)) {
+            /* The folder chosen in the install window */
+        } else {
+            len = GetEnvironmentVariableW(L"LOCALAPPDATA", base, 2048);
+            if (len == 0 || len >= 2048) { MessageBoxW(NULL, L"Could not find your local app data folder.", TITLE, MB_ICONERROR); return 1; }
+            _snwprintf(setup.root, 2048, L"%ls\\Syncplay Marquee", base);
+        }
     } else {
         _snwprintf(setup.root, 2048, L"%ls", base);
     }
@@ -420,6 +441,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR arguments, in
     wchar_t noLaunch[8];
     if (GetEnvironmentVariableW(L"MARQUEE_NO_LAUNCH", noLaunch, 8) > 0) return 0;
 
+    SetEnvironmentVariableW(L"MARQUEE_EXE", setup.exePath);  /* Inherited by the app */
     static wchar_t python[2048], script[2048], command[65536];
     _snwprintf(python, 2048, L"%ls\\pythonw.exe", setup.pyDir);
     _snwprintf(script, 2048, L"%ls\\program\\launch-syncplay.pyw", setup.appDir);
@@ -429,7 +451,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR arguments, in
     ZeroMemory(&startup, sizeof(startup));
     startup.cb = sizeof(startup);
     if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, setup.appDir, &startup, &process)) {
-        MessageBoxW(NULL, L"Could not start Syncplay Marquee. Delete the folder %LOCALAPPDATA%\\Syncplay Marquee and open this file again.", TITLE, MB_ICONERROR);
+        wchar_t message[2400];
+        _snwprintf(message, 2400, L"Could not start Syncplay Marquee. Delete the folder %ls and open this file again.", setup.root);
+        MessageBoxW(NULL, message, TITLE, MB_ICONERROR);
         return 1;
     }
     CloseHandle(process.hThread);

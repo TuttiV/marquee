@@ -46,6 +46,15 @@ _configDir = None
 _systemPalette = None
 
 
+def _systemPrefersDark(app):
+    """Qt 6.5+ knows the system's light/dark choice (Windows settings, the Linux desktop portal)."""
+    try:
+        from syncplay.vendor.Qt.QtCore import Qt
+        return app.styleHints().colorScheme() == Qt.ColorScheme.Dark
+    except Exception:
+        return False
+
+
 def setConfigDir(configDir):
     """Where the choice is remembered (the same folder as the other small settings); loads what was saved there."""
     global _chosen, _configDir
@@ -273,6 +282,27 @@ class _MessageBoxIcons(object):
             box.setIconPixmap(icons.pixmap(picked[0], tokens(isDarkPalette(box.palette()))[picked[1]], 36))
 
 
+_quiet = None
+
+
+def _quietStyle():
+    """Fusion, minus the old-fashioned icons Linux puts on dialog buttons (OK, Cancel...)."""
+    global _quiet
+    if _quiet is None:  # Kept here: if Python dropped the object, Qt would quietly stop calling styleHint below
+        import importlib
+        from syncplay.vendor.Qt import QtWidgets, __binding__
+        QProxyStyle = importlib.import_module(__binding__ + ".QtWidgets").QProxyStyle  # Not exposed by the Qt.py shim
+
+        class QuietStyle(QProxyStyle):
+            def styleHint(self, hint, option=None, widget=None, returnData=None):
+                if hint == QtWidgets.QStyle.SH_DialogButtonBox_ButtonsHaveIcons:
+                    return 0
+                return super().styleHint(hint, option, widget, returnData)
+        _quiet = QuietStyle(QtWidgets.QStyleFactory.create("Fusion"))
+        _quiet.setObjectName("fusion")
+    return _quiet
+
+
 def applyApplicationTheme(app):
     """Fusion style + the shared stylesheet on the whole application, so every window and dialog matches.
 
@@ -281,13 +311,18 @@ def applyApplicationTheme(app):
     import tempfile
     from syncplay.ui import icons
     try:
-        app.setStyle("Fusion")  # Same widget rendering on every OS, so the stylesheet looks identical
+        app.setStyle(_quietStyle())  # Same widget rendering on every OS, so the stylesheet looks identical
     except Exception:
-        pass
+        try:
+            app.setStyle("Fusion")
+        except Exception:
+            pass
     global _systemPalette
     if _systemPalette is None:
         _systemPalette = app.palette()  # Whatever Windows (or the start-up code) gave us: what "System" means
     picked = THEMES.get(_chosen)
+    if not picked and _systemPrefersDark(app) and not isDarkPalette(_systemPalette):
+        picked = THEMES["dark"]  # The system is in dark mode but Qt's own palette is light (common on Linux)
     try:
         app.setPalette(_paletteFor(picked[0]) if picked else _systemPalette)
     except Exception:

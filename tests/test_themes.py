@@ -83,3 +83,19 @@ class ApplyTests(unittest.TestCase):
         theme.chooseTheme("system", False)
         theme.applyApplicationTheme(self.app)
         self.assertEqual(self.app.palette().window().color().name(), original)
+
+
+@unittest.skipUnless(HAVE_QT, "Qt not available")
+class DialogButtonIconTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def test_dialog_buttons_have_no_icons(self):
+        import gc
+        theme.applyApplicationTheme(self.app)
+        gc.collect()  # The style must survive Python's garbage collection
+        box = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Information, "t", "text", QtWidgets.QMessageBox.Ok)
+        self.addCleanup(box.close)
+        self.assertTrue(box.button(QtWidgets.QMessageBox.Ok).icon().isNull())
+        self.assertEqual(self.app.style().styleHint(QtWidgets.QStyle.SH_DialogButtonBox_ButtonsHaveIcons), 0)

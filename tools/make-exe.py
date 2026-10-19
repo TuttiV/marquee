@@ -23,7 +23,7 @@ import zipfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PYTHON_VERSION = "3.11.9"
 EMBED_URL = "https://www.python.org/ftp/python/{0}/python-{0}-embed-amd64.zip".format(PYTHON_VERSION)
-REQUIREMENTS = ["twisted[tls]", "pem", "certifi", "PySide6-Essentials", "pywin32"]
+REQUIREMENTS = ["twisted[tls]", "pem", "certifi", "PySide6-Essentials==6.11.2", "pywin32"]
 NEVER = {"syncplay-defaults.json", "syncplay-secrets.json", "syncplay.log", "marquee.log"}
 
 # Parts of the Qt wheel the app never uses (QML/Quick, designer, tools, software OpenGL, networking, printing, SQL, docs, stubs).
