@@ -27,7 +27,7 @@ QComboBox QAbstractItemView { background: %(surface)s; color: %(text)s; border: 
     selection-background-color: %(selection)s; selection-color: %(text)s; }
 QCheckBox { color: %(text)s; }
 QCheckBox:disabled { color: %(muted)s; }
-QPushButton { padding: 6px 16px; border-radius: 6px; border: 1px solid %(border)s; background: %(surface2)s; color: %(text)s; }
+QPushButton { padding: 6px 16px; border-radius: 6px; border: 1px solid %(strongBorder)s; background: %(button)s; color: %(text)s; }
 QPushButton:hover { border-color: %(accent)s; }
 QPushButton:disabled { color: %(muted)s; background: %(surface)s; }
 QPushButton#primary { background: %(ready)s; color: %(readyText)s; border-color: %(ready)s; font-weight: 600; }

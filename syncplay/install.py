@@ -374,6 +374,42 @@ def removeFolderLater(folder, pid=None, popen=subprocess.Popen, tempDir=None):
     return folder
 
 
+# --- cancelling the first-start install (Windows) ----------------------------------------------------------------------
+
+def isFinishedInstall(root, reg=None):
+    """Windows: True when root is a real install (its .exe was copied in, or it is the folder picked in the install window),
+    not just the files the downloaded .exe unpacked before anyone pressed Install."""
+    if os.path.isfile(os.path.join(root, EXE_NAME)):
+        return True
+    chosen = readInstallDir(reg)
+    return bool(chosen) and os.path.normcase(os.path.abspath(chosen)) == os.path.normcase(os.path.abspath(root))
+
+
+def discardScript(root, pid):
+    """The .bat that removes what the .exe unpacked once this copy has closed. It first renames the folder: Windows refuses
+    while any copy of the app still uses it (so a copy started again in the meantime is never touched), and once renamed
+    the next start unpacks afresh into the usual place instead of into a half-deleted folder."""
+    root = os.path.abspath(root)
+    if os.path.basename(root) != FOLDER_NAME or not os.path.isdir(os.path.join(root, "app")):
+        raise ValueError("Refusing to remove {!r}: not a Syncplay Marquee folder".format(root))
+    doomed = "{}.removing-{}".format(FOLDER_NAME, pid)
+    lines = ["@echo off", "for /l %%i in (1,1,60) do (", '  ren "{}" "{}" >nul 2>&1 && goto gone'.format(root, doomed),
+             "  ping -n 2 127.0.0.1 >nul", ")", "goto end", ":gone",
+             'rmdir /s /q "{}" >nul 2>&1'.format(os.path.join(os.path.dirname(root), doomed)), ":end", 'del "%~f0"']
+    return "\r\n".join(lines) + "\r\n"
+
+
+def discardUnpacked(root, pid=None, popen=subprocess.Popen, tempDir=None):
+    """Install cancelled on the first start: remove the unpacked files once this copy has closed (Windows)."""
+    pid = pid or os.getpid()
+    path = os.path.join(tempDir or os.environ.get("TEMP") or os.path.dirname(os.path.abspath(root)), "syncplay-marquee-cancel.bat")
+    with open(path, "w", encoding="ascii", errors="replace", newline="") as f:
+        f.write(discardScript(root, pid))
+    popen(["cmd", "/c", path], creationflags=_NO_WINDOW, close_fds=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+          stderr=subprocess.DEVNULL)
+    return path
+
+
 # --- uninstall --------------------------------------------------------------------------------------------------------
 
 def uninstallScript(root, settingsFiles=(), registryKeys=()):

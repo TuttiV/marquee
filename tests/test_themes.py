@@ -31,6 +31,11 @@ class TokenTests(unittest.TestCase):
         for name, (tokens, dark) in theme.THEMES.items():
             self.assertEqual(set(tokens), set(theme.DARK), name)
 
+    def test_light_mode_never_uses_pure_white(self):
+        for key, value in theme.LIGHT.items():
+            self.assertNotIn(value.lower(), ("#ffffff", "#fff", "white"), key)
+        self.assertNotIn("#ffffff", theme.styleSheet(False).lower())
+
     def test_text_is_readable_in_every_theme(self):
         for name, (t, dark) in theme.THEMES.items():
             for surface in ("bg", "panel", "surface2"):

@@ -12,7 +12,7 @@ from syncplay.vendor.Qt.QtCore import Qt
 
 class InstallDialog(QtWidgets.QDialog):
     """outcome after closing: "here" (shortcuts set, same folder), "moved" (copied to chosenRoot: start that copy and quit),
-    or "skipped" (Not now)."""
+    or "cancelled" (Cancel, or the window was closed)."""
 
     def __init__(self, currentRoot, exePath=None, playerFound=True, parent=None, copier=None, shortcutSetter=None, suggested=None,
                  firstRun=True):
@@ -21,7 +21,7 @@ class InstallDialog(QtWidgets.QDialog):
         self.currentRoot = currentRoot
         self.exePath = exePath
         self.chosenRoot = currentRoot
-        self.outcome = "skipped"
+        self.outcome = "cancelled"
         self._copier = copier or install.copyInstall
         self._setShortcuts = shortcutSetter or install.setShortcuts
         self.setWindowTitle(getMessage("install-title"))
@@ -96,13 +96,13 @@ class InstallDialog(QtWidgets.QDialog):
         layout.addSpacing(6)
         buttons = QtWidgets.QHBoxLayout()
         buttons.addStretch(1)
-        self.laterButton = QtWidgets.QPushButton(getMessage("install-later"))
-        self.laterButton.clicked.connect(self.reject)
+        self.cancelButton = QtWidgets.QPushButton(getMessage("install-cancel"))
+        self.cancelButton.clicked.connect(self.reject)
         self.installButton = QtWidgets.QPushButton(getMessage("install-button"))
         self.installButton.setProperty("tone", "blue")
         self.installButton.setDefault(True)
         self.installButton.clicked.connect(self.install)
-        buttons.addWidget(self.laterButton)
+        buttons.addWidget(self.cancelButton)
         buttons.addWidget(self.installButton)
         layout.addLayout(buttons)
         self._check()
@@ -141,7 +141,7 @@ class InstallDialog(QtWidgets.QDialog):
         if self._check():
             return
         target = self.target()
-        for widget in (self.installButton, self.laterButton, self.browseButton, self.folderEdit, self.menuCheck, self.desktopCheck):
+        for widget in (self.installButton, self.cancelButton, self.browseButton, self.folderEdit, self.menuCheck, self.desktopCheck):
             widget.setEnabled(False)
         try:
             if not self.moving() and os.name == "nt" and self.exePath and os.path.isfile(self.exePath):
@@ -158,7 +158,7 @@ class InstallDialog(QtWidgets.QDialog):
             self._setShortcuts(target, self.menuCheck.isChecked(), self.desktopCheck.isChecked())
         except (OSError, ValueError) as e:
             self.progress.hide()
-            for widget in (self.installButton, self.laterButton, self.menuCheck, self.desktopCheck):
+            for widget in (self.installButton, self.cancelButton, self.menuCheck, self.desktopCheck):
                 widget.setEnabled(True)
             for widget in (self.browseButton, self.folderEdit):
                 widget.setEnabled(self.canMove)

@@ -1,3 +1,15 @@
+## Build 29 - A design pass: six new themes and a clearer people list
+- Six new themes under Window > Theme, each following its own project's colour guide: Catppuccin Mocha and Latte, Rosé Pine and Rosé Pine Dawn, Nord, and Tokyo Night. The menu is grouped into standard, our own looks and community themes.
+- People list: everyone has a round initial in their chat colour, "Not ready" is a calm grey (red now only means a problem, like a different file), and the column header row is gone.
+- Easier reading: chat and the message box use Windows' 14px body size, nothing in the window is smaller than 12px, and the room name is no longer italic.
+
+## Build 28 - Fixes, a proper installer and a softer light mode
+- Fixed: a chat message could make the other person's app drop off the server and come straight back ("has left", then "has joined"). It happened when their video player wasn't connected yet. If the app can't handle a message from the server it now writes the error to its log and stays connected.
+- Fixed: Restart after an update brought back the old version until you closed the app completely. It now restarts straight into the new one. (The update to this build still needs that one full close and reopen.)
+- The install window works like a real installer: Cancel, or closing it, quits without installing and it asks again next time. On Windows the files it had unpacked are removed too.
+- Light mode is calmer: built on a cool grey scale with nothing pure white, white-ish fields and buttons with clear borders, a soft blue resume bar, and the chat scrollbar only appears when there is something to scroll.
+- Voice calls are gone (the Voice button and menu entry); nobody used them.
+
 ## Build 27 - Linux, and a real install window
 - New install window on first start: pick the install folder (Browse...) and tick the shortcuts you want: Start menu (or the Linux applications menu) and desktop, each on its own. Help > Install and shortcuts changes them later or moves the app to another folder.
 - Linux version (for Linux Mint, Ubuntu and similar 64-bit systems): a self-contained download with everything included; you only need mpv or VLC. Install it with the same window; invite links, updates and uninstall work as on Windows.

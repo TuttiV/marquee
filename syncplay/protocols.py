@@ -1,6 +1,8 @@
 # coding:utf8
 import json
+import sys
 import time
+import traceback
 from datetime import datetime
 from functools import wraps
 
@@ -129,6 +131,17 @@ class SyncClientProtocol(JSONCommandProtocol):
         self._client.ui.showErrorMessage(error)
         self._client.protocolFactory.stopRetrying()
         self.drop()
+
+    def handleMessages(self, messages):
+        # An error while handling one message must not cost the connection: Twisted would drop it, the app would
+        # reconnect, and everyone in the room would see us leave and rejoin. Log it (syncplay.log) and carry on.
+        for command, payload in messages.items():
+            try:
+                JSONCommandProtocol.handleMessages(self, {command: payload})
+            except Exception:
+                details = traceback.format_exc()
+                sys.stderr.write("Error while handling a {} message from the server:\n{}".format(command, details))
+                self._client.ui.showDebugMessage("Error while handling a {} message: {}".format(command, details))
 
     def _extractHelloArguments(self, hello):
         username = hello["username"] if "username" in hello else None

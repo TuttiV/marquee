@@ -15,7 +15,7 @@ from twisted.internet import task
 from syncplay import utils, constants, version, revision, release_number
 from syncplay.messages import getMessage
 from syncplay.ui.consoleUI import ConsoleUI
-from syncplay import branding, updater, instance, secrets, install, playlistfile, voice, links, resume, emoji, subdelay
+from syncplay import branding, updater, instance, secrets, install, playlistfile, links, resume, emoji, subdelay
 from syncplay import invite as inviteLinks
 from syncplay.private_build import BUILD
 from syncplay.ui import icons, theme
@@ -175,6 +175,7 @@ class ModernUserlistDelegate(UserlistItemDelegate):
     """The people table: a round ready / not-ready badge before each name and an operator star after it. The other columns
     (size, length, file) are ordinary muted cells that turn red when they differ from yours."""
     INSET = 12
+    AVATAR = 22
 
     def _isUserRow(self, index):
         return index.parent() != index.parent().parent()
@@ -184,7 +185,7 @@ class ModernUserlistDelegate(UserlistItemDelegate):
         user = self._isUserRow(index)
         size.setHeight(max(size.height(), 34 if user else 30))
         if index.column() == constants.USERLIST_GUI_USERNAME_COLUMN and user:
-            size.setWidth(size.width() + self.INSET + 100)
+            size.setWidth(size.width() + self.INSET + self.AVATAR + 8 + 100)
         return size
 
     def paint(self, painter, option, index):
@@ -218,12 +219,12 @@ class ModernUserlistDelegate(UserlistItemDelegate):
         if userReady is not None:
             word = getMessage("ready-state-on" if userReady else "ready-state-off")
             pillFont = QtGui.QFont(option.font)
-            pillFont.setPointSizeF(max(option.font.pointSizeF() - 1.0, 7.0))
+            pillFont.setPixelSize(12)
             pillFont.setWeight(QtGui.QFont.DemiBold)
             pillMetrics = QtGui.QFontMetrics(pillFont)
             pillWidth = pillMetrics.horizontalAdvance(word) + 18
             pill = QtCore.QRectF(rect.right() - pillWidth - 6, rect.center().y() - 10, pillWidth, 20)
-            color = QtGui.QColor(tokens["ready"] if userReady else tokens["danger"])
+            color = QtGui.QColor(tokens["ready"] if userReady else tokens["muted"])
             soft = QtGui.QColor(color)
             soft.setAlpha(46)
             painter.setPen(Qt.NoPen)
@@ -233,9 +234,21 @@ class ModernUserlistDelegate(UserlistItemDelegate):
             painter.setPen(color)
             painter.drawText(pill, Qt.AlignCenter, word)
             pillWidth += 12
+        # A round initial in the person's own colour, the same one their name has in the chat
+        left = rect.x() + self.INSET
+        avatar = QtCore.QRectF(left, rect.center().y() - self.AVATAR / 2 + 0.5, self.AVATAR, self.AVATAR)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QtGui.QColor(theme.userColor(name, dark)))
+        painter.drawEllipse(avatar)
+        initialFont = QtGui.QFont(option.font)
+        initialFont.setPixelSize(12)
+        initialFont.setWeight(QtGui.QFont.DemiBold)
+        painter.setFont(initialFont)
+        painter.setPen(QtGui.QColor(tokens["panel"]))
+        painter.drawText(avatar, Qt.AlignCenter, theme.initialOf(name))
+        left += self.AVATAR + 8
         painter.setFont(nameFont)
         painter.setPen(foreground.color() if hasattr(foreground, "color") else QtGui.QColor(tokens["text"]))
-        left = rect.x() + self.INSET
         nameRect = QtCore.QRect(left, rect.y(), max(rect.right() - left - pillWidth - (20 if isController else 4), 0), rect.height())
         painter.drawText(nameRect, Qt.AlignLeft | Qt.AlignVCenter, metrics.elidedText(name, Qt.ElideRight, nameRect.width()))
         if isController:
@@ -274,7 +287,7 @@ class ToggleSwitch(QtWidgets.QAbstractButton):
         painter.drawRoundedRect(track, self.TRACK_H / 2, self.TRACK_H / 2)
         knobSize = self.TRACK_H - 6
         knobX = track.right() - knobSize - 3 if on else track.left() + 3
-        painter.setBrush(QtGui.QColor("#ffffff"))
+        painter.setBrush(QtGui.QColor(tokens["knob"]))
         painter.drawEllipse(QtCore.QRectF(knobX, track.top() + 3, knobSize, knobSize))
         if self.hasFocus():
             painter.setBrush(Qt.NoBrush)
@@ -922,7 +935,7 @@ class MainWindow(QtWidgets.QMainWindow):
             color = theme.userColor(username, getattr(self, "_dark", False))
             self.newMessage(
                 '<div style="margin-top: 10px; margin-bottom: 1px;"><span style="color: {}; font-weight: 600;">{}</span>'
-                ' <span style="color: {}; font-size: 11px;">{}</span></div><div style="margin-top: 1px; margin-bottom: 1px;">{}</div>'.format(
+                ' <span style="color: {}; font-size: 12px;">{}</span></div><div style="margin-top: 1px; margin-bottom: 1px;">{}</div>'.format(
                     color, username, tokens["muted"], time.strftime("%H:%M", time.localtime()), html))
         self._lastChatter = (username, now)
 
@@ -991,9 +1004,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.newWatchlist = []
             roomitem = QtGui.QStandardItem(room)
             font = QtGui.QFont()
-            font.setItalic(True)
             if room == currentUser.room:
-                font.setWeight(QtGui.QFont.Bold)
+                font.setWeight(QtGui.QFont.DemiBold)
             roomitem.setFont(font)
             roomitem.setFlags(roomitem.flags() & ~Qt.ItemIsEditable)
             usertreeRoot.appendRow(roomitem)
@@ -1172,7 +1184,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.listTreeView.setColumnHidden(2, True)
         self.listTreeView.setColumnHidden(3, False)
         self.listTreeView.setColumnHidden(4, narrow)
-        self.listTreeView.header().setVisible(True)
+        self.listTreeView.header().setVisible(False)  # Like a member list: the columns speak for themselves (names, files, .srt)
 
     def subtitleInfoChanged(self):
         """Someone announced a subtitle (or it stopped applying): redraw the table."""
@@ -1405,7 +1417,6 @@ class MainWindow(QtWidgets.QMainWindow):
         for chip, key in ((self.subtitlesChip, "chip-subtitles-label"), (self.libraryChip, "chip-library-label"),
                           (self.inviteChip, "chip-invite-label"), (self.privateChip, "chip-private-label")):
             chip.setText("" if narrow else getMessage(key))
-        self._updateVoiceChip()
         self._applyFileColumns()
         self._elideFileLine()
         QtCore.QTimer.singleShot(60, self._fitPlaylist)  # Once the new layout has its real size
@@ -1903,7 +1914,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.privateChip.setIcon(icons.icon("lock", tokens["text"], 14))
         self.sslButton.setIcon(icons.icon("lock", tokens["ready"], 16))
         self.libraryChip.setIcon(icons.icon("library", tokens["text"], 14))
-        self.voiceChip.setIcon(icons.icon("mic", tokens["text"], 14))
         self.moreChip.setIcon(icons.icon("more", tokens["text"], 16))
         self.tuneButton.setIcon(icons.icon("tune", tokens["text"], 16))
         self.emojiButton.setIcon(icons.icon("smile", tokens["text"], 18))
@@ -2046,29 +2056,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.roomFrame.isVisibleTo(self):
             self._showRoomLink(currentUser.room)
 
-    # --- Voice -----------------------------------------------------------------------------------------------------
-
-    def _currentVoiceUrl(self):
-        entry = getattr(self, "_voiceEntry", None)
-        client = self._syncplayClient
-        return entry[1] if entry and client and entry[0] == client.getRoom() else None
-
-    def _updateVoiceChip(self):
-        self.voiceChip.setText("" if getattr(self, "_narrow", False) else getMessage("chip-voice-join-label" if self._currentVoiceUrl() else "chip-voice-label"))
-        self.voiceChip.setVisible(bool(self._currentVoiceUrl()))  # Until someone starts a call, Voice lives in the "..." menu
-
-    @needsClient
-    def startVoiceCall(self):
-        """Join the room's voice call (started by someone earlier), or start one: a random Jitsi link goes into the chat."""
-        url = self._currentVoiceUrl()
-        if not url:
-            url = voice.newUrl()
-            self._voiceEntry = (self._syncplayClient.getRoom(), url)
-            self._syncplayClient.sendChat(getMessage("voice-chat-line").format(url))
-            self.showMessage(getMessage("voice-started-notification"))
-            self._updateVoiceChip()
-        QtGui.QDesktopServices.openUrl(QUrl(url))
-
     # --- Desktop notifications --------------------------------------------------------------------------------------
 
     def _setUpTray(self):
@@ -2118,12 +2105,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._tray.showMessage(branding.NAME, text[:200], QtWidgets.QSystemTrayIcon.Information, 4000)
 
     def _noticeChat(self, username, plain):
-        """Chat from somebody else: pick up a voice-call link, and notify when they mention your name."""
+        """Chat from somebody else: notify when they mention your name."""
         client = self._syncplayClient
-        url = voice.find(plain)
-        if url and client:
-            self._voiceEntry = (client.getRoom(), url)
-            self._updateVoiceChip()
         me = client.getUsername() if client else None
         if me and username != me and re.search(r"(?<!\w)@?" + re.escape(me) + r"(?!\w)", plain, re.IGNORECASE):
             self.notifyEvent("mention", "{}: {}".format(username, plain))
@@ -2694,7 +2677,7 @@ class MainWindow(QtWidgets.QMainWindow):
         window.outputbox.insertHtml('<div style="color: gray; font-size: 12px;">{}</div><br />'.format(getMessage("welcome-chat-line")))
         window.outputbox.moveCursor(QtGui.QTextCursor.End)
         window.outputbox.setCursorWidth(0)
-        if not isMacOS(): window.outputbox.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        window.outputbox.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Always-on drew a full-height bar over a short chat
 
         window.outputlabel = QtWidgets.QLabel(getMessage("chat-heading-label"))
         window.outputlabel.setObjectName("sectionLabel")
@@ -2794,23 +2777,17 @@ class MainWindow(QtWidgets.QMainWindow):
         window.libraryChip.setObjectName("chipButton")
         window.libraryChip.setToolTip(getMessage("torbox-menu-label").replace("&", "").rstrip("."))
         window.libraryChip.clicked.connect(self.openTorBoxDialog)
-        window.voiceChip = QtWidgets.QPushButton(getMessage("chip-voice-label"))
-        window.voiceChip.setObjectName("chipButton")
-        window.voiceChip.setToolTip(getMessage("chip-voice-tooltip"))
-        window.voiceChip.clicked.connect(self.startVoiceCall)
         window.moreChip = QtWidgets.QToolButton()
         window.moreChip.setObjectName("moreButton")
         window.moreChip.setToolTip(getMessage("chip-more-tooltip"))
         window.moreChip.setPopupMode(QtWidgets.QToolButton.InstantPopup)
         moreMenu = QtWidgets.QMenu(window.moreChip)
         for label, slot in (("chip-subtitles-label", self.openSubtitleDialog), ("chip-library-label", self.openTorBoxDialog),
-                            ("chip-voice-label", self.startVoiceCall), ("chip-private-label", self.newPrivateRoom)):
+                            ("chip-private-label", self.newPrivateRoom)):
             moreMenu.addAction(getMessage(label), slot)
         window.moreChip.setMenu(moreMenu)
         for chip in (window.subtitlesChip, window.libraryChip, window.privateChip):
             chip.hide()  # Still there for the code and shortcuts that use them; the "..." menu is how you reach them now
-        window.voiceChip.hide()
-        window.quickActionsLayout.addWidget(window.voiceChip)
         window.quickActionsLayout.addWidget(window.inviteChip)
         window.quickActionsLayout.addWidget(window.moreChip)
         window.userlistLayout.addLayout(window.quickActionsLayout, 0, 1, Qt.AlignRight)
@@ -3218,6 +3195,8 @@ class MainWindow(QtWidgets.QMainWindow):
         window.themeMenu = window.windowMenu.addMenu(getMessage("theme-menu-label"))
         window.themeActions = {}
         for themeName in theme.THEME_ORDER:
+            if themeName in theme.THEME_GROUP_STARTS:
+                window.themeMenu.addSeparator()
             key = "theme-system-linux-label" if (themeName == "system" and not isWindows()) else "theme-" + themeName + "-label"
             action = window.themeMenu.addAction(getMessage(key))
             action.setCheckable(True)

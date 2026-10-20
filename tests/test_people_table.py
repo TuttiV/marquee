@@ -58,7 +58,7 @@ class TableTests(unittest.TestCase):
         self.client.subtitleFor.side_effect = lambda name: {"Ann": "Show.en.srt"}.get(name)
         self.show([person("Ann", False)])
         view = self.window.listTreeView
-        self.assertFalse(view.header().isHidden())
+        self.assertTrue(view.header().isHidden())  # A member list, not a spreadsheet
         self.assertEqual([view.isColumnHidden(c) for c in range(5)], [False, True, True, False, False])
         self.assertIsInstance(view.itemDelegate(), ModernUserlistDelegate)
         room = view.model().item(0)
