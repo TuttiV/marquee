@@ -28,7 +28,7 @@ class ProgressStrip(QtWidgets.QWidget):
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         font = QtGui.QFont(self.font())
-        font.setPixelSize(11)
+        font.setPixelSize(12)
         painter.setFont(font)
         metrics = QtGui.QFontMetrics(font)
         left = formatTime(self._position) if self._duration else ""

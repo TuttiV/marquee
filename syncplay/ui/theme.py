@@ -51,9 +51,60 @@ SAND = {
     "bar": "#e7dece", "strongBorder": "#d6c9b3", "knob": "#f5f2ec",
 }
 
+# Community palettes, mapped onto the same roles with each project's own style guide (Catppuccin: base/mantle/crust panes,
+# subtext for labels, overlay 2 at 25% for selection; Rose Pine: base/surface/overlay, iris accent, foam for success;
+# Nord: Polar Night panes, Frost accent, Aurora for states; Tokyo Night: its night palette). Where a palette colour misses
+# the readability rules above it is nudged just enough to pass (legibility first, as Catppuccin's guide itself says).
+CATPPUCCIN_MOCHA = {
+    "bg": "#181825", "panel": "#1e1e2e", "surface": "#1e1e2e", "surface2": "#313244", "header": "#24273a", "border": "#45475a",
+    "text": "#cdd6f4", "muted": "#a6adc8", "accent": "#89b4fa", "accentHover": "#b4befe", "accentText": "#11111b", "link": "#89b4fa",
+    "ready": "#a6e3a1", "readyHover": "#bfeebb", "readyText": "#11111b", "readySoft": "rgba(166, 227, 161, 0.16)", "danger": "#f38ba8", "selection": "rgba(147, 153, 178, 0.25)",
+    "hover": "rgba(205, 214, 244, 0.05)", "warn": "#fab387", "field": "#313244", "fieldBorder": "transparent", "button": "#313244", "buttonBorder": "transparent",
+    "buttonHover": "#45475a", "bar": "#313244", "strongBorder": "#585b70", "knob": "#cdd6f4",
+}
+CATPPUCCIN_LATTE = {
+    "bg": "#e6e9ef", "panel": "#eff1f5", "surface": "#eff1f5", "surface2": "#dce0e8", "header": "#e9ecf2", "border": "#ccd0da",
+    "text": "#383a52", "muted": "#5c5f77", "accent": "#1a5ad9", "accentHover": "#1549b3", "accentText": "#eff1f5", "link": "#1a5ad9",
+    "ready": "#2f7a1f", "readyHover": "#26661a", "readyText": "#eff1f5", "readySoft": "rgba(64, 160, 43, 0.16)", "danger": "#c4113a", "selection": "rgba(124, 127, 147, 0.22)",
+    "hover": "rgba(76, 79, 105, 0.06)", "warn": "#9a5b07", "field": "#eff1f5", "fieldBorder": "#bcc0cc", "button": "#eff1f5", "buttonBorder": "#bcc0cc",
+    "buttonHover": "#e6e9ef", "bar": "#dbe4f9", "strongBorder": "#acb0be", "knob": "#eff1f5",
+}
+ROSE_PINE = {
+    "bg": "#191724", "panel": "#1f1d2e", "surface": "#1f1d2e", "surface2": "#26233a", "header": "#21202e", "border": "#403d52",
+    "text": "#e0def4", "muted": "#a6a2c0", "accent": "#c4a7e7", "accentHover": "#d6c2ef", "accentText": "#191724", "link": "#c4a7e7",
+    "ready": "#9ccfd8", "readyHover": "#b5dce3", "readyText": "#191724", "readySoft": "rgba(156, 207, 216, 0.16)", "danger": "#eb6f92", "selection": "rgba(110, 106, 134, 0.35)",
+    "hover": "rgba(224, 222, 244, 0.05)", "warn": "#f6c177", "field": "#26233a", "fieldBorder": "transparent", "button": "#26233a", "buttonBorder": "transparent",
+    "buttonHover": "#403d52", "bar": "#26233a", "strongBorder": "#524f67", "knob": "#e0def4",
+}
+ROSE_PINE_DAWN = {
+    "bg": "#f2e9e1", "panel": "#fffaf3", "surface": "#fffaf3", "surface2": "#ece2d9", "header": "#faf4ed", "border": "#dfdad9",
+    "text": "#464166", "muted": "#625e7d", "accent": "#286983", "accentHover": "#1f566b", "accentText": "#fffaf3", "link": "#286983",
+    "ready": "#2f6f62", "readyHover": "#255a4f", "readyText": "#fffaf3", "readySoft": "rgba(86, 148, 159, 0.18)", "danger": "#a8546c", "selection": "rgba(144, 122, 169, 0.18)",
+    "hover": "rgba(87, 82, 121, 0.05)", "warn": "#8f5a10", "field": "#fffaf3", "fieldBorder": "#cecacd", "button": "#fffaf3", "buttonBorder": "#cecacd",
+    "buttonHover": "#f4ede8", "bar": "#ece4ee", "strongBorder": "#bdb7bb", "knob": "#fffaf3",
+}
+NORD = {
+    "bg": "#2e3440", "panel": "#3b4252", "surface": "#3b4252", "surface2": "#434c5e", "header": "#363c4a", "border": "#4c566a",
+    "text": "#eceff4", "muted": "#c2c9d6", "accent": "#88c0d0", "accentHover": "#8fbcbb", "accentText": "#2e3440", "link": "#88c0d0",
+    "ready": "#a3be8c", "readyHover": "#b4cb9f", "readyText": "#2e3440", "readySoft": "rgba(163, 190, 140, 0.18)", "danger": "#e4a3aa", "selection": "rgba(136, 192, 208, 0.22)",
+    "hover": "rgba(236, 239, 244, 0.05)", "warn": "#ebcb8b", "field": "#434c5e", "fieldBorder": "transparent", "button": "#434c5e", "buttonBorder": "transparent",
+    "buttonHover": "#4c566a", "bar": "#434c5e", "strongBorder": "#5b657a", "knob": "#eceff4",
+}
+TOKYO_NIGHT = {
+    "bg": "#16161e", "panel": "#1a1b26", "surface": "#1a1b26", "surface2": "#292e42", "header": "#1f2335", "border": "#3b4261",
+    "text": "#c0caf5", "muted": "#a9b1d6", "accent": "#7aa2f7", "accentHover": "#97b6fb", "accentText": "#16161e", "link": "#7dcfff",
+    "ready": "#9ece6a", "readyHover": "#b3da88", "readyText": "#16161e", "readySoft": "rgba(158, 206, 106, 0.16)", "danger": "#f7768e", "selection": "rgba(54, 74, 130, 0.6)",
+    "hover": "rgba(192, 202, 245, 0.05)", "warn": "#ff9e64", "field": "#292e42", "fieldBorder": "transparent", "button": "#292e42", "buttonBorder": "transparent",
+    "buttonHover": "#3b4261", "bar": "#292e42", "strongBorder": "#414868", "knob": "#c0caf5",
+}
+
 # name -> (tokens, is it dark). "system" follows Windows (dark or light) and is not listed here.
-THEMES = {"dark": (DARK, True), "light": (LIGHT, False), "cinema": (CINEMA, True), "midnight": (MIDNIGHT, True), "sand": (SAND, False)}
-THEME_ORDER = ("system", "dark", "light", "cinema", "midnight", "sand")
+THEMES = {"dark": (DARK, True), "light": (LIGHT, False), "cinema": (CINEMA, True), "midnight": (MIDNIGHT, True), "sand": (SAND, False),
+          "catppuccin_mocha": (CATPPUCCIN_MOCHA, True), "catppuccin_latte": (CATPPUCCIN_LATTE, False), "rose_pine": (ROSE_PINE, True),
+          "rose_pine_dawn": (ROSE_PINE_DAWN, False), "nord": (NORD, True), "tokyo_night": (TOKYO_NIGHT, True)}
+THEME_ORDER = ("system", "dark", "light", "cinema", "midnight", "sand", "catppuccin_mocha", "catppuccin_latte", "rose_pine",
+               "rose_pine_dawn", "nord", "tokyo_night")
+THEME_GROUP_STARTS = ("cinema", "catppuccin_mocha")  # A separator in the menu before these
 _chosen = "system"
 _configDir = None
 _systemPalette = None
@@ -150,6 +201,7 @@ def styleSheet(dark):
     return """
 QWidget { font-family: "Segoe UI Variable Text", "Segoe UI", "Inter", "SF Pro Text", "Noto Sans", "Helvetica Neue", sans-serif; font-size: 13px; }
 QMainWindow, QDialog { background: %(bg)s; }
+QTextBrowser, QLineEdit { font-size: 14px; }  /* Reading and typing at Windows' body size (14px); the denser lists stay at 13px */
 QMainWindow > QWidget#mainFrame { background: %(bg)s; }
 QToolTip { background: %(header)s; color: %(text)s; border: 1px solid %(border)s; padding: 4px 6px; }
 
@@ -168,7 +220,7 @@ QPushButton#roomLink:hover { color: %(text)s; }
 QGroupBox[collapsed="true"] { background: transparent; border: none; padding: 0; }
 QPushButton[tone="blue"] { background: %(accent)s; color: %(accentText)s; font-weight: 700; border: none; border-radius: 6px; min-height: 30px; }
 QPushButton[tone="blue"]:hover { background: %(accentHover)s; }
-QLabel#sectionLabel { color: %(muted)s; font-size: 11px; font-weight: 700; }
+QLabel#sectionLabel { color: %(muted)s; font-size: 12px; font-weight: 700; }
 
 QTextBrowser, QTreeView, QListWidget {
     background: %(surface)s; color: %(text)s; border: 1px solid %(border)s; border-radius: 8px; padding: 4px;
@@ -182,7 +234,7 @@ QListWidget::item:hover { background: %(hover)s; }
 QListWidget::item:selected { background: %(selection)s; color: %(text)s; }
 QHeaderView { background: %(header)s; border: none; }
 QHeaderView::section { background: %(header)s; color: %(muted)s; border: none; border-bottom: 1px solid %(border)s;
-    padding: 7px 10px; font-size: 11px; font-weight: 600; }
+    padding: 7px 10px; font-size: 12px; font-weight: 600; }
 QTreeView#members { padding: 0; }
 QTreeView#members::item { padding: 5px 4px; border-bottom: 1px solid %(header)s; border-radius: 0; }
 QGroupBox QListWidget { border: 1px dashed %(border)s; background: transparent; }

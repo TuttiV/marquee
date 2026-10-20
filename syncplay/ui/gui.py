@@ -175,6 +175,7 @@ class ModernUserlistDelegate(UserlistItemDelegate):
     """The people table: a round ready / not-ready badge before each name and an operator star after it. The other columns
     (size, length, file) are ordinary muted cells that turn red when they differ from yours."""
     INSET = 12
+    AVATAR = 22
 
     def _isUserRow(self, index):
         return index.parent() != index.parent().parent()
@@ -184,7 +185,7 @@ class ModernUserlistDelegate(UserlistItemDelegate):
         user = self._isUserRow(index)
         size.setHeight(max(size.height(), 34 if user else 30))
         if index.column() == constants.USERLIST_GUI_USERNAME_COLUMN and user:
-            size.setWidth(size.width() + self.INSET + 100)
+            size.setWidth(size.width() + self.INSET + self.AVATAR + 8 + 100)
         return size
 
     def paint(self, painter, option, index):
@@ -218,12 +219,12 @@ class ModernUserlistDelegate(UserlistItemDelegate):
         if userReady is not None:
             word = getMessage("ready-state-on" if userReady else "ready-state-off")
             pillFont = QtGui.QFont(option.font)
-            pillFont.setPointSizeF(max(option.font.pointSizeF() - 1.0, 7.0))
+            pillFont.setPixelSize(12)
             pillFont.setWeight(QtGui.QFont.DemiBold)
             pillMetrics = QtGui.QFontMetrics(pillFont)
             pillWidth = pillMetrics.horizontalAdvance(word) + 18
             pill = QtCore.QRectF(rect.right() - pillWidth - 6, rect.center().y() - 10, pillWidth, 20)
-            color = QtGui.QColor(tokens["ready"] if userReady else tokens["danger"])
+            color = QtGui.QColor(tokens["ready"] if userReady else tokens["muted"])
             soft = QtGui.QColor(color)
             soft.setAlpha(46)
             painter.setPen(Qt.NoPen)
@@ -233,9 +234,21 @@ class ModernUserlistDelegate(UserlistItemDelegate):
             painter.setPen(color)
             painter.drawText(pill, Qt.AlignCenter, word)
             pillWidth += 12
+        # A round initial in the person's own colour, the same one their name has in the chat
+        left = rect.x() + self.INSET
+        avatar = QtCore.QRectF(left, rect.center().y() - self.AVATAR / 2 + 0.5, self.AVATAR, self.AVATAR)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QtGui.QColor(theme.userColor(name, dark)))
+        painter.drawEllipse(avatar)
+        initialFont = QtGui.QFont(option.font)
+        initialFont.setPixelSize(12)
+        initialFont.setWeight(QtGui.QFont.DemiBold)
+        painter.setFont(initialFont)
+        painter.setPen(QtGui.QColor(tokens["panel"]))
+        painter.drawText(avatar, Qt.AlignCenter, theme.initialOf(name))
+        left += self.AVATAR + 8
         painter.setFont(nameFont)
         painter.setPen(foreground.color() if hasattr(foreground, "color") else QtGui.QColor(tokens["text"]))
-        left = rect.x() + self.INSET
         nameRect = QtCore.QRect(left, rect.y(), max(rect.right() - left - pillWidth - (20 if isController else 4), 0), rect.height())
         painter.drawText(nameRect, Qt.AlignLeft | Qt.AlignVCenter, metrics.elidedText(name, Qt.ElideRight, nameRect.width()))
         if isController:
@@ -922,7 +935,7 @@ class MainWindow(QtWidgets.QMainWindow):
             color = theme.userColor(username, getattr(self, "_dark", False))
             self.newMessage(
                 '<div style="margin-top: 10px; margin-bottom: 1px;"><span style="color: {}; font-weight: 600;">{}</span>'
-                ' <span style="color: {}; font-size: 11px;">{}</span></div><div style="margin-top: 1px; margin-bottom: 1px;">{}</div>'.format(
+                ' <span style="color: {}; font-size: 12px;">{}</span></div><div style="margin-top: 1px; margin-bottom: 1px;">{}</div>'.format(
                     color, username, tokens["muted"], time.strftime("%H:%M", time.localtime()), html))
         self._lastChatter = (username, now)
 
@@ -991,9 +1004,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.newWatchlist = []
             roomitem = QtGui.QStandardItem(room)
             font = QtGui.QFont()
-            font.setItalic(True)
             if room == currentUser.room:
-                font.setWeight(QtGui.QFont.Bold)
+                font.setWeight(QtGui.QFont.DemiBold)
             roomitem.setFont(font)
             roomitem.setFlags(roomitem.flags() & ~Qt.ItemIsEditable)
             usertreeRoot.appendRow(roomitem)
@@ -1172,7 +1184,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.listTreeView.setColumnHidden(2, True)
         self.listTreeView.setColumnHidden(3, False)
         self.listTreeView.setColumnHidden(4, narrow)
-        self.listTreeView.header().setVisible(True)
+        self.listTreeView.header().setVisible(False)  # Like a member list: the columns speak for themselves (names, files, .srt)
 
     def subtitleInfoChanged(self):
         """Someone announced a subtitle (or it stopped applying): redraw the table."""
@@ -3183,6 +3195,8 @@ class MainWindow(QtWidgets.QMainWindow):
         window.themeMenu = window.windowMenu.addMenu(getMessage("theme-menu-label"))
         window.themeActions = {}
         for themeName in theme.THEME_ORDER:
+            if themeName in theme.THEME_GROUP_STARTS:
+                window.themeMenu.addSeparator()
             key = "theme-system-linux-label" if (themeName == "system" and not isWindows()) else "theme-" + themeName + "-label"
             action = window.themeMenu.addAction(getMessage(key))
             action.setCheckable(True)
