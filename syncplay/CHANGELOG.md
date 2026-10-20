@@ -1,3 +1,7 @@
+## Build 30 - The server list is back, and the latest Syncplay
+- Connection settings: the server box shows its drop-down arrow again, so you can pick one of the public Syncplay servers (the current list from syncplay.pl, or syncplay.pl:8995 to 8999 when update checks are off). You can still type any other server. Every other drop-down got the arrow back too.
+- Includes the latest Syncplay changes (upstream 1.7.7 development, October 2026): a fix for a crash and endless reconnecting when a server refuses the connection (it only ever happened on macOS).
+
 ## Build 29 - A design pass: six new themes and a clearer people list
 - Six new themes under Window > Theme, each following its own project's colour guide: Catppuccin Mocha and Latte, Rosé Pine and Rosé Pine Dawn, Nord, and Tokyo Night. The menu is grouped into standard, our own looks and community themes.
 - People list: everyone has a round initial in their chat colour, "Not ready" is a calm grey (red now only means a problem, like a different file), and the column header row is gone.

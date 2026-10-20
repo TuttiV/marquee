@@ -44,6 +44,7 @@ _PATHS = {
     "key": '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
     "unlock": '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/>',
     "chevron": '<path d="M9 6l6 6-6 6"/>',
+    "chevron-down": '<path d="M6 9l6 6 6-6"/>',
     "chevrons": '<path d="M7 7l5 5-5 5M13 7l5 5-5 5"/>',
     "door": '<path d="M5 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17M3 21h18M12 12h.01"/>',
     "check": '<path d="M20 6 9 17l-5-5"/>',

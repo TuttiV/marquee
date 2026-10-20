@@ -762,6 +762,7 @@ class ConfigDialog(QtWidgets.QDialog):
         self.connectionSettingsGroup = QtWidgets.QGroupBox(getMessage("connection-group-title"))
         self.loadSavedPublicServerList()
         self.hostCombobox = QtWidgets.QComboBox(self)
+        self.hostCombobox.setItemDelegate(QtWidgets.QStyledItemDelegate(self.hostCombobox))  # So the list's rows take the theme's padding
         if self.publicServers:
             i = 0
             for publicServer in self.publicServers:

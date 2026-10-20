@@ -246,7 +246,6 @@ QLineEdit, QComboBox, QSpinBox {
     selection-background-color: %(accent)s; selection-color: %(accentText)s;
 }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border-color: %(accent)s; }
-QComboBox::drop-down { border: none; width: 20px; }
 QComboBox QAbstractItemView { background: %(panel)s; color: %(text)s; border: 1px solid %(border)s;
     selection-background-color: %(accent)s; selection-color: %(accentText)s; }
 
@@ -317,6 +316,15 @@ QRadioButton::indicator:checked { background: qradialgradient(cx:0.5, cy:0.5, ra
 QGroupBox::indicator:hover, QCheckBox::indicator:hover { border-color: %(accent)s; }
 QGroupBox::indicator:checked, QCheckBox::indicator:checked { background: %(accent)s; border-color: %(accent)s; image: url("%(check)s"); }
 """ % dict(t, check=checkImagePath.replace("\\", "/"))
+
+
+def comboStyleSheet(arrowPath):
+    """A visible chevron on drop-down boxes (the server list, rooms, players), so they read as lists, not text fields."""
+    return """
+QComboBox::drop-down { border: none; width: 28px; }
+QComboBox::down-arrow { image: url("%s"); width: 12px; height: 12px; }
+QComboBox QAbstractItemView::item { padding: 6px 10px; min-height: 22px; }
+""" % arrowPath.replace("\\", "/")
 
 
 class _MessageBoxIcons(object):
@@ -397,9 +405,12 @@ def applyApplicationTheme(app):
     try:  # The check mark lives in a small cached .svg because stylesheets reference images by path
         cacheDir = os.path.join(tempfile.gettempdir(), "syncplay-theme")
         os.makedirs(cacheDir, exist_ok=True)
-        checkPath = os.path.join(cacheDir, "check-{}.svg".format(_chosen if picked else ("dark" if dark else "light")))
+        flavour = _chosen if picked else ("dark" if dark else "light")
+        checkPath = os.path.join(cacheDir, "check-{}.svg".format(flavour))
         icons.writeSvg("check", tokens(dark)["accentText"], checkPath)
-        extra = checkboxStyleSheet(dark, checkPath)
+        arrowPath = os.path.join(cacheDir, "chevron-down-{}.svg".format(flavour))
+        icons.writeSvg("chevron-down", tokens(dark)["muted"], arrowPath)
+        extra = checkboxStyleSheet(dark, checkPath) + comboStyleSheet(arrowPath)
     except OSError:
         pass
     app.setStyleSheet(styleSheet(dark) + extra)
