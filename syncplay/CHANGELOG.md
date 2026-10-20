@@ -1,6 +1,9 @@
-## Build 28 - Chat no longer knocks people out of the room
-- Fixed: a chat message could make the other person's app drop off the server and come straight back ("has left", then "has joined"). It happened when their video player wasn't connected yet.
-- More generally, if the app can't handle one message from the server it now writes the error to its log and stays connected, instead of reconnecting.
+## Build 28 - Fixes, a proper installer and a softer light mode
+- Fixed: a chat message could make the other person's app drop off the server and come straight back ("has left", then "has joined"). It happened when their video player wasn't connected yet. If the app can't handle a message from the server it now writes the error to its log and stays connected.
+- Fixed: Restart after an update brought back the old version until you closed the app completely. It now restarts straight into the new one. (The update to this build still needs that one full close and reopen.)
+- The install window works like a real installer: Cancel, or closing it, quits without installing and it asks again next time. On Windows the files it had unpacked are removed too.
+- Light mode is calmer: built on a cool grey scale with nothing pure white, white-ish fields and buttons with clear borders, a soft blue resume bar, and the chat scrollbar only appears when there is something to scroll.
+- Voice calls are gone (the Voice button and menu entry); nobody used them.
 
 ## Build 27 - Linux, and a real install window
 - New install window on first start: pick the install folder (Browse...) and tick the shortcuts you want: Start menu (or the Linux applications menu) and desktop, each on its own. Help > Install and shortcuts changes them later or moves the app to another folder.

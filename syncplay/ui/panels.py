@@ -138,13 +138,13 @@ class ReadyButton(QtWidgets.QPushButton):
         self._shown = True
         tokens = theme.tokens(theme.isDarkPalette(QtWidgets.QApplication.palette()))
         t = self._t
-        ready, muted, border = _qcolor(tokens["ready"]), _qcolor(tokens["muted"]), _qcolor(tokens["border"])
+        ready, muted, border = _qcolor(tokens["ready"]), _qcolor(tokens["muted"]), _qcolor(tokens["strongBorder"])
         soft = _qcolor(tokens["readySoft"])
         hover = self.underMouse() and self.isEnabled() and not self.isDown()
         edge = _mix(border, ready, max(t, 0.45 if hover else 0.0))
         fill = _mix(QtGui.QColor(soft.red(), soft.green(), soft.blue(), 0), soft, t)
         if self.isDown():
-            fill = _mix(fill, _qcolor(tokens["surface2"]), 0.6 * (1 - t))
+            fill = _mix(fill, _qcolor(tokens["button"]), 0.6 * (1 - t))
         textColor = _mix(muted, ready, t if t > 0 else (0.5 if hover else 0.0))
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing, True)

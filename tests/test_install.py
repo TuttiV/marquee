@@ -357,6 +357,41 @@ class WindowsShortcutTargetTests(WindowsMode):
         install.writeInstallDir(r"D:\Apps\Syncplay Marquee", reg)
         self.assertEqual(store["path"], r"Software\Syncplay Marquee")
         self.assertTrue(install.readInstallDir(reg).endswith("Syncplay Marquee"))
+        base, root = makeRoot()
+        self.addCleanup(shutil.rmtree, base, True)
+        self.assertFalse(install.isFinishedInstall(root, reg))  # Only unpacked so far
+        install.writeInstallDir(root, reg)
+        self.assertTrue(install.isFinishedInstall(root, reg))  # The folder picked in the install window
+
+
+class CancelledInstallTests(unittest.TestCase):
+    def test_the_cleanup_renames_first_so_a_copy_in_use_is_never_touched(self):
+        base, root = makeRoot()
+        self.addCleanup(shutil.rmtree, base, True)
+        script = install.discardScript(root, 4242)
+        renamed = "Syncplay Marquee.removing-4242"
+        self.assertIn('ren "{}" "{}" >nul 2>&1 && goto gone'.format(root, renamed), script)
+        self.assertIn('rmdir /s /q "{}"'.format(os.path.join(base, renamed)), script)
+        self.assertNotIn('rmdir /s /q "{}"'.format(root), script)  # The live folder itself is only ever renamed
+        self.assertLess(script.index("ren "), script.index("rmdir"))
+        self.assertTrue(script.endswith('del "%~f0"\r\n'))
+
+    def test_refuses_anything_that_is_not_an_unpacked_app_folder(self):
+        base = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, base, True)
+        with self.assertRaises(ValueError):
+            install.discardScript(base, 1)
+        with self.assertRaises(ValueError):
+            install.discardScript(os.path.join(base, "Syncplay Marquee"), 1)  # No app folder inside
+
+    def test_the_script_is_written_and_started(self):
+        base, root = makeRoot()
+        self.addCleanup(shutil.rmtree, base, True)
+        started = []
+        path = install.discardUnpacked(root, pid=7, popen=lambda args, **k: started.append(args), tempDir=base)
+        self.assertEqual(started, [["cmd", "/c", path]])
+        with open(path) as f:
+            self.assertIn("removing-7", f.read())
 
 
 @unittest.skipUnless(HAVE_QT, "Qt not available")
@@ -416,7 +451,7 @@ class InstallDialogTests(unittest.TestCase):
             raise OSError("disk full")
         dialog._setShortcuts = failing
         dialog.install()
-        self.assertEqual(dialog.outcome, "skipped")
+        self.assertEqual(dialog.outcome, "cancelled")
         self.assertIn("disk full", dialog.problem.text())
         self.assertTrue(dialog.installButton.isEnabled())
 
@@ -477,11 +512,36 @@ class FirstStartTests(unittest.TestCase):
         self.assertFalse(self.getter._offerInstall())  # Asked once, never again
         self.assertEqual(len(self.shown), 1)
 
-    def test_not_now_or_same_folder_carries_on_starting(self):
-        self.FakeDialog.outcome = "skipped"
+    def test_installing_in_the_same_folder_carries_on_starting(self):
+        self.FakeDialog.outcome = "here"
         self.addCleanup(setattr, self.FakeDialog, "outcome", "moved")
         self.assertFalse(self.getter._offerInstall())
         self.assertEqual(self.started, [])
+        self.assertFalse(self.getter._offerInstall())  # Installed: not asked again
+        self.assertEqual(len(self.shown), 1)
+
+    def test_cancelling_quits_and_asks_again_next_time(self):
+        self.FakeDialog.outcome = "cancelled"
+        self.addCleanup(setattr, self.FakeDialog, "outcome", "moved")
+        self.assertTrue(self.getter._offerInstall())  # True: this copy quits instead of opening the app
+        self.assertEqual(self.started, [])
+        self.assertTrue(self.getter._offerInstall())
+        self.assertEqual(len(self.shown), 2)
+
+    def test_cancelling_on_windows_removes_only_what_the_exe_just_unpacked(self):
+        from unittest.mock import patch
+        from syncplay.ui import ConfigurationGetter as module
+        discarded = []
+        self.FakeDialog.outcome = "cancelled"
+        self.addCleanup(setattr, self.FakeDialog, "outcome", "moved")
+        with patch("syncplay.install.discardUnpacked", lambda root, **k: discarded.append(root)), \
+                patch("syncplay.install.readInstallDir", lambda *a: None), patch.object(module.os, "name", "nt"):
+            self.assertTrue(self.getter._offerInstall())
+            self.assertEqual(discarded, [self.root])
+            with open(os.path.join(self.root, install.EXE_NAME), "wb") as f:
+                f.write(b"MZ")  # A real install keeps its .exe in the folder: never removed
+            self.assertTrue(self.getter._offerInstall())
+            self.assertEqual(discarded, [self.root])
 
     def test_people_who_were_asked_about_shortcuts_before_are_not_asked_again(self):
         from syncplay import secrets

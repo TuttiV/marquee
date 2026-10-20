@@ -3,17 +3,24 @@
 # Flat neutral greys with one restrained blue accent (taken from the logo's own blues): a modern take on Syncplay's classic two-pane window.
 # bg (window) < panel/surface (chat, tables, cards) < surface2 (controls, hovered rows); header = table header strips.
 # Muted text is >= 4.5:1 against panel and surface (WCAG AA).
+# Light, built on the Radix "Slate" scale (cool, faintly blue greys; the same layering Fluent 2 and Linear use): a soft
+# app background (slate 3), cards, fields and buttons one layer brighter (slate 1, never pure white), subtle separators
+# (slate 6), firmer control borders (slate 7/8) and text from the top of the scale (slate 11/12).
 LIGHT = {
-    "bg": "#eceef1", "panel": "#ffffff", "surface": "#ffffff", "surface2": "#e6e8ec", "header": "#f3f4f6", "border": "#d5d8de",
-    "text": "#24272d", "muted": "#5d636e", "accent": "#2b62d6", "accentHover": "#2050b8", "accentText": "#ffffff", "link": "#1f5fcf",
-    "ready": "#238650", "readyHover": "#1c6e41", "readyText": "#ffffff", "readySoft": "rgba(35, 134, 80, 0.14)",
-    "danger": "#d0454c", "selection": "rgba(43, 98, 214, 0.16)", "hover": "rgba(0, 0, 0, 0.045)", "warn": "#a86a00",
+    "bg": "#f0f0f3", "panel": "#fcfcfd", "surface": "#fcfcfd", "surface2": "#e8e8ec", "header": "#f9f9fb", "border": "#d9d9e0",
+    "text": "#1c2024", "muted": "#60646c", "accent": "#2b62d6", "accentHover": "#2050b8", "accentText": "#fcfcfd", "link": "#1f5fcf",
+    "ready": "#218358", "readyHover": "#1b6e4a", "readyText": "#fcfcfd", "readySoft": "rgba(48, 164, 108, 0.14)",
+    "danger": "#ce2c31", "selection": "rgba(43, 98, 214, 0.14)", "hover": "rgba(0, 0, 59, 0.045)", "warn": "#8a5800",
+    "field": "#fcfcfd", "fieldBorder": "#cdced6", "button": "#fcfcfd", "buttonBorder": "#cdced6", "buttonHover": "#f0f0f3",
+    "bar": "#e3eaf8", "strongBorder": "#b9bbc6", "knob": "#fcfcfd",
 }
 DARK = {
     "bg": "#1f2024", "panel": "#26272c", "surface": "#26272c", "surface2": "#34363d", "header": "#2a2c31", "border": "#3b3e46",
     "text": "#e3e5e9", "muted": "#9da2ac", "accent": "#3871e0", "accentHover": "#5a91f3", "accentText": "#ffffff", "link": "#6db3ff",
     "ready": "#3fb874", "readyHover": "#55c98a", "readyText": "#06210f", "readySoft": "rgba(63, 184, 116, 0.18)",
     "danger": "#ef6b6b", "selection": "rgba(59, 120, 234, 0.28)", "hover": "rgba(255, 255, 255, 0.05)", "warn": "#e0a040",
+    "field": "#34363d", "fieldBorder": "transparent", "button": "#34363d", "buttonBorder": "transparent", "buttonHover": "#3b3e46",
+    "bar": "#34363d", "strongBorder": "#3b3e46", "knob": "#f2f3f5",
 }
 
 # Extra looks. Each follows the same rules as DARK/LIGHT: text on bg/panel >= 7:1, muted >= 4.5:1, accentText on accent >= 4.5:1.
@@ -24,18 +31,24 @@ CINEMA = {
     "text": "#f0e7dc", "muted": "#ad9f90", "accent": "#d8a24a", "accentHover": "#e9b765", "accentText": "#1c1306", "link": "#f0bb6a",
     "ready": "#5cbb7d", "readyHover": "#74cc93", "readyText": "#07210f", "readySoft": "rgba(92, 187, 125, 0.18)",
     "danger": "#ec6a5e", "selection": "rgba(216, 162, 74, 0.26)", "hover": "rgba(255, 240, 220, 0.05)", "warn": "#ec8a52",
+    "field": "#2d241d", "fieldBorder": "transparent", "button": "#2d241d", "buttonBorder": "transparent", "buttonHover": "#3d3228",
+    "bar": "#2d241d", "strongBorder": "#3d3228", "knob": "#f2f3f5",
 }
 MIDNIGHT = {
     "bg": "#000000", "panel": "#0b0d12", "surface": "#0b0d12", "surface2": "#171b24", "header": "#0f121a", "border": "#232936",
     "text": "#e2e8f4", "muted": "#8f9bb2", "accent": "#26c6e8", "accentHover": "#5bdaf1", "accentText": "#001a20", "link": "#5bdaf1",
     "ready": "#3fd18a", "readyHover": "#62dfa2", "readyText": "#03210f", "readySoft": "rgba(63, 209, 138, 0.18)",
     "danger": "#ff6b81", "selection": "rgba(38, 198, 232, 0.24)", "hover": "rgba(255, 255, 255, 0.06)", "warn": "#f0b34a",
+    "field": "#171b24", "fieldBorder": "transparent", "button": "#171b24", "buttonBorder": "transparent", "buttonHover": "#232936",
+    "bar": "#171b24", "strongBorder": "#232936", "knob": "#f2f3f5",
 }
 SAND = {
     "bg": "#f1eadf", "panel": "#fbf8f2", "surface": "#fbf8f2", "surface2": "#e7dece", "header": "#f6f1e7", "border": "#d6c9b3",
     "text": "#2e2921", "muted": "#675e50", "accent": "#b4541e", "accentHover": "#963f12", "accentText": "#ffffff", "link": "#a24410",
     "ready": "#2f7f49", "readyHover": "#276b3e", "readyText": "#ffffff", "readySoft": "rgba(47, 127, 73, 0.14)",
     "danger": "#c23b3b", "selection": "rgba(180, 84, 30, 0.16)", "hover": "rgba(0, 0, 0, 0.045)", "warn": "#955d00",
+    "field": "#e7dece", "fieldBorder": "transparent", "button": "#e7dece", "buttonBorder": "transparent", "buttonHover": "#d6c9b3",
+    "bar": "#e7dece", "strongBorder": "#d6c9b3", "knob": "#f5f2ec",
 }
 
 # name -> (tokens, is it dark). "system" follows Windows (dark or light) and is not listed here.
@@ -177,7 +190,7 @@ QLabel#hint { color: %(muted)s; font-size: 12px; }
 QLabel#chatTip { color: %(muted)s; }
 
 QLineEdit, QComboBox, QSpinBox {
-    background: %(surface2)s; color: %(text)s; border: 1px solid transparent; border-radius: 6px; padding: 8px 12px;
+    background: %(field)s; color: %(text)s; border: 1px solid %(fieldBorder)s; border-radius: 6px; padding: 8px 12px;
     selection-background-color: %(accent)s; selection-color: %(accentText)s;
 }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border-color: %(accent)s; }
@@ -186,9 +199,9 @@ QComboBox QAbstractItemView { background: %(panel)s; color: %(text)s; border: 1p
     selection-background-color: %(accent)s; selection-color: %(accentText)s; }
 
 QPushButton {
-    background: %(surface2)s; color: %(text)s; border: 1px solid transparent; border-radius: 6px; padding: 7px 14px;
+    background: %(button)s; color: %(text)s; border: 1px solid %(buttonBorder)s; border-radius: 6px; padding: 7px 14px;
 }
-QPushButton:hover { background: %(border)s; }
+QPushButton:hover { background: %(buttonHover)s; }
 QPushButton:pressed { background: %(surface2)s; }
 QPushButton:disabled { color: %(muted)s; }
 QPushButton#sendButton { background: %(accent)s; color: %(accentText)s; font-weight: 600; }
@@ -217,7 +230,7 @@ QLabel#statusDot { font-size: 12px; padding-left: 8px; }
 
 QFrame#emojiPicker { background: %(panel)s; border: 1px solid %(border)s; border-radius: 8px; }
 QFrame#updateBar { background: %(selection)s; border: none; border-radius: 0; }
-QFrame#resumeBar { background: %(surface2)s; border: none; border-radius: 0; }
+QFrame#resumeBar { background: %(bar)s; border: none; border-radius: 0; }
 QToolButton#moreButton { background: transparent; border: none; border-radius: 6px; padding: 4px 6px; }
 QToolButton#moreButton:hover { background: %(surface2)s; }
 QToolButton#moreButton::menu-indicator { image: none; width: 0; }
@@ -245,8 +258,8 @@ def checkboxStyleSheet(dark, checkImagePath):
     """Boxed checkboxes (also used for the playlist group's toggle) with a crisp check mark."""
     t = tokens(dark)
     return """
-QGroupBox::indicator, QCheckBox::indicator { width: 15px; height: 15px; border: 1px solid %(border)s; border-radius: 3px; background: %(surface2)s; }
-QRadioButton::indicator { width: 14px; height: 14px; border: 1px solid %(border)s; border-radius: 8px; background: %(surface2)s; }
+QGroupBox::indicator, QCheckBox::indicator { width: 15px; height: 15px; border: 1px solid %(strongBorder)s; border-radius: 3px; background: %(field)s; }
+QRadioButton::indicator { width: 14px; height: 14px; border: 1px solid %(strongBorder)s; border-radius: 8px; background: %(field)s; }
 QRadioButton::indicator:hover { border-color: %(accent)s; }
 QRadioButton::indicator:checked { background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0 %(accentText)s, stop:0.38 %(accentText)s, stop:0.42 %(accent)s, stop:1 %(accent)s); border-color: %(accent)s; }
 QGroupBox::indicator:hover, QCheckBox::indicator:hover { border-color: %(accent)s; }

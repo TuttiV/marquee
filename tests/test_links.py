@@ -1,21 +1,6 @@
 import unittest
 
-from syncplay import links, voice
-
-
-class VoiceTests(unittest.TestCase):
-    def test_new_links_are_unguessable_and_recognised(self):
-        urls = {voice.newUrl() for _ in range(500)}
-        self.assertEqual(len(urls), 500)
-        for url in list(urls)[:50]:
-            self.assertTrue(url.startswith("https://meet.jit.si/SyncplayMarquee-"))
-            self.assertEqual(voice.find("Voice call: " + url + " see you"), url)
-
-    def test_only_our_own_kind_of_link_is_picked_up(self):
-        for text in (None, "", "https://meet.jit.si/SomethingElse", "https://evil.example/SyncplayMarquee-abcdefghijkl",
-                     "http://meet.jit.si/SyncplayMarquee-abcdefghijkl", "https://meet.jit.si.evil.example/SyncplayMarquee-abcdefghijkl",
-                     "https://meet.jit.si/SyncplayMarquee-short"):
-            self.assertIsNone(voice.find(text), text)
+from syncplay import links
 
 
 class LinkTests(unittest.TestCase):

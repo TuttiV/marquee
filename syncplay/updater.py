@@ -535,11 +535,25 @@ subprocess.Popen(command, cwd=appDir, env=env, close_fds=True, creationflags=get
 """
 
 
+LAUNCHER = os.path.join("program", "launch-syncplay.pyw")
+
+
+def restartArguments(argv, appDir):
+    """What the fresh copy runs. The packaged app's launcher installs a downloaded update before loading any of the app,
+    so a restart has to go through it; by now sys.argv[0] is syncplayClient.py (the launcher runs it with runpy), and
+    starting that directly would bring the old version back with the update still waiting."""
+    launcher = os.path.join(appDir, LAUNCHER)
+    if os.path.isfile(launcher):
+        return [launcher] + list(argv[1:])
+    return list(argv)
+
+
 def relaunch(pid, python, argv, appDir, fromBuild=BUILD, skipStartWindow=True):
     """Start a helper that launches a fresh copy of the app once process pid has exited. Raises OSError if it can't.
 
     skipStartWindow=False brings the start (connection) window back on the new copy."""
-    subprocess.Popen([python, "-c", _RELAUNCH_HELPER, str(pid), appDir, str(fromBuild), "1" if skipStartWindow else "0", python] + list(argv), cwd=appDir,
+    argv = restartArguments(argv, appDir)
+    subprocess.Popen([python, "-c", _RELAUNCH_HELPER, str(pid), appDir, str(fromBuild), "1" if skipStartWindow else "0", python] + argv, cwd=appDir,
                      close_fds=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

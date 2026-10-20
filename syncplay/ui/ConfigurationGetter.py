@@ -501,8 +501,9 @@ class ConfigurationGetter(object):
             return True  # Never warn about a missing player because the check itself failed
 
     def _offerInstall(self):
-        """First start of the packaged app (Windows .exe or the Linux download): the install window, once. Returns True when
-        the app was copied to another folder and started from there (this copy should then just quit)."""
+        """First start of the packaged app (Windows .exe or the Linux download): the install window, until it is installed.
+        Returns True when this copy should quit: the install was cancelled, or the app was copied to another folder and
+        started from there."""
         try:
             from syncplay import install, secrets
             configDir = self._config.get('configDir')
@@ -510,7 +511,6 @@ class ConfigurationGetter(object):
                 return False
             if secrets.load(install.INSTALL_FLAG, configDir) or secrets.load(install.FLAG, configDir):
                 return False
-            secrets.save(install.INSTALL_FLAG, "yes", configDir)
             from syncplay.vendor.Qt import QtWidgets
             from syncplay.ui import theme
             from syncplay.ui.InstallDialog import InstallDialog
@@ -519,6 +519,13 @@ class ConfigurationGetter(object):
             suggested = install.targetRoot(install.defaultParent()) if install.LINUX else current
             dialog = InstallDialog(current, os.environ.get(install.EXE_ENV), self._playerFound(), suggested=suggested)
             dialog.exec_()
+            if dialog.outcome not in ("here", "moved"):
+                # Cancelled, or the window was closed: like any installer, quit without installing and ask again next
+                # time. On Windows the files the .exe just unpacked go too, unless that folder is a real install.
+                if os.name == "nt" and not install.isFinishedInstall(current):
+                    install.discardUnpacked(current)
+                return True
+            secrets.save(install.INSTALL_FLAG, "yes", configDir)
             if dialog.outcome != "moved":
                 return False
             if install.LINUX:
@@ -681,7 +688,7 @@ class ConfigurationGetter(object):
                 print(getMessage("unable-import-gui-error"))
                 self._config['noGui'] = True
         if not self._config['noGui'] and self._offerInstall():
-            sys.exit(0)  # The app was installed in another folder and that copy has started
+            sys.exit(0)  # Install cancelled, or the app was installed in another folder and that copy has started
         if self._config['file'] and self._config['file'][:2] == "--":
             self._config['playerArgs'].insert(0, self._config['file'])
             self._config['file'] = None

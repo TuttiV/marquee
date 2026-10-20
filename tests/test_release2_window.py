@@ -99,27 +99,13 @@ class WindowTests(unittest.TestCase):
         self.window.syncCheckAction.trigger()
         self.assertEqual(self.client.startSyncCheck.call_count, 2)
 
-    # --- voice
-    def test_voice_button_starts_a_call_then_joins_it(self):
-        opened = []
-        with patch.object(QtGui.QDesktopServices, "openUrl", side_effect=lambda url: opened.append(url.toString())):
-            self.window.showMessage = MagicMock()
-            self.assertEqual(self.window.voiceChip.text(), "Voice")
-            self.window.voiceChip.click()
-            line = self.client.sendChat.call_args[0][0]
-            self.assertTrue(line.startswith("Voice call: https://meet.jit.si/SyncplayMarquee-"))
-            self.assertEqual(opened[0], line.split(": ", 1)[1])
-            self.assertEqual(self.window.voiceChip.text(), "Join voice")
-            self.window.voiceChip.click()  # Joins the same call instead of starting another
-            self.assertEqual(self.client.sendChat.call_count, 1)
-            self.assertEqual(opened[1], opened[0])
-
-    def test_a_voice_link_from_a_friend_turns_the_button_into_join(self):
+    # --- voice (removed: not needed)
+    def test_there_is_no_voice_call_button_or_menu_entry(self):
+        self.assertFalse(hasattr(self.window, "voiceChip"))
+        labels = [action.text() for action in self.window.moreChip.menu().actions()]
+        self.assertFalse([label for label in labels if "voice" in label.lower()], labels)
         self.window.showMessage("<Ann> Voice call: https://meet.jit.si/SyncplayMarquee-abcdefghijkl")
-        self.assertEqual(self.window.voiceChip.text(), "Join voice")
-        self.client.getRoom.return_value = "another-room"  # A call belongs to its room
-        self.window._updateVoiceChip()
-        self.assertEqual(self.window.voiceChip.text(), "Voice")
+        self.client.sendChat.assert_not_called()  # A call link from an older copy is just a link in the chat
 
     # --- chat links
     def test_links_in_chat_are_clickable_and_escaped(self):

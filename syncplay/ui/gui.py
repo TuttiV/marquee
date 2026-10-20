@@ -15,7 +15,7 @@ from twisted.internet import task
 from syncplay import utils, constants, version, revision, release_number
 from syncplay.messages import getMessage
 from syncplay.ui.consoleUI import ConsoleUI
-from syncplay import branding, updater, instance, secrets, install, playlistfile, voice, links, resume, emoji, subdelay
+from syncplay import branding, updater, instance, secrets, install, playlistfile, links, resume, emoji, subdelay
 from syncplay import invite as inviteLinks
 from syncplay.private_build import BUILD
 from syncplay.ui import icons, theme
@@ -274,7 +274,7 @@ class ToggleSwitch(QtWidgets.QAbstractButton):
         painter.drawRoundedRect(track, self.TRACK_H / 2, self.TRACK_H / 2)
         knobSize = self.TRACK_H - 6
         knobX = track.right() - knobSize - 3 if on else track.left() + 3
-        painter.setBrush(QtGui.QColor("#ffffff"))
+        painter.setBrush(QtGui.QColor(tokens["knob"]))
         painter.drawEllipse(QtCore.QRectF(knobX, track.top() + 3, knobSize, knobSize))
         if self.hasFocus():
             painter.setBrush(Qt.NoBrush)
@@ -1405,7 +1405,6 @@ class MainWindow(QtWidgets.QMainWindow):
         for chip, key in ((self.subtitlesChip, "chip-subtitles-label"), (self.libraryChip, "chip-library-label"),
                           (self.inviteChip, "chip-invite-label"), (self.privateChip, "chip-private-label")):
             chip.setText("" if narrow else getMessage(key))
-        self._updateVoiceChip()
         self._applyFileColumns()
         self._elideFileLine()
         QtCore.QTimer.singleShot(60, self._fitPlaylist)  # Once the new layout has its real size
@@ -1903,7 +1902,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.privateChip.setIcon(icons.icon("lock", tokens["text"], 14))
         self.sslButton.setIcon(icons.icon("lock", tokens["ready"], 16))
         self.libraryChip.setIcon(icons.icon("library", tokens["text"], 14))
-        self.voiceChip.setIcon(icons.icon("mic", tokens["text"], 14))
         self.moreChip.setIcon(icons.icon("more", tokens["text"], 16))
         self.tuneButton.setIcon(icons.icon("tune", tokens["text"], 16))
         self.emojiButton.setIcon(icons.icon("smile", tokens["text"], 18))
@@ -2046,29 +2044,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.roomFrame.isVisibleTo(self):
             self._showRoomLink(currentUser.room)
 
-    # --- Voice -----------------------------------------------------------------------------------------------------
-
-    def _currentVoiceUrl(self):
-        entry = getattr(self, "_voiceEntry", None)
-        client = self._syncplayClient
-        return entry[1] if entry and client and entry[0] == client.getRoom() else None
-
-    def _updateVoiceChip(self):
-        self.voiceChip.setText("" if getattr(self, "_narrow", False) else getMessage("chip-voice-join-label" if self._currentVoiceUrl() else "chip-voice-label"))
-        self.voiceChip.setVisible(bool(self._currentVoiceUrl()))  # Until someone starts a call, Voice lives in the "..." menu
-
-    @needsClient
-    def startVoiceCall(self):
-        """Join the room's voice call (started by someone earlier), or start one: a random Jitsi link goes into the chat."""
-        url = self._currentVoiceUrl()
-        if not url:
-            url = voice.newUrl()
-            self._voiceEntry = (self._syncplayClient.getRoom(), url)
-            self._syncplayClient.sendChat(getMessage("voice-chat-line").format(url))
-            self.showMessage(getMessage("voice-started-notification"))
-            self._updateVoiceChip()
-        QtGui.QDesktopServices.openUrl(QUrl(url))
-
     # --- Desktop notifications --------------------------------------------------------------------------------------
 
     def _setUpTray(self):
@@ -2118,12 +2093,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._tray.showMessage(branding.NAME, text[:200], QtWidgets.QSystemTrayIcon.Information, 4000)
 
     def _noticeChat(self, username, plain):
-        """Chat from somebody else: pick up a voice-call link, and notify when they mention your name."""
+        """Chat from somebody else: notify when they mention your name."""
         client = self._syncplayClient
-        url = voice.find(plain)
-        if url and client:
-            self._voiceEntry = (client.getRoom(), url)
-            self._updateVoiceChip()
         me = client.getUsername() if client else None
         if me and username != me and re.search(r"(?<!\w)@?" + re.escape(me) + r"(?!\w)", plain, re.IGNORECASE):
             self.notifyEvent("mention", "{}: {}".format(username, plain))
@@ -2694,7 +2665,7 @@ class MainWindow(QtWidgets.QMainWindow):
         window.outputbox.insertHtml('<div style="color: gray; font-size: 12px;">{}</div><br />'.format(getMessage("welcome-chat-line")))
         window.outputbox.moveCursor(QtGui.QTextCursor.End)
         window.outputbox.setCursorWidth(0)
-        if not isMacOS(): window.outputbox.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        window.outputbox.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Always-on drew a full-height bar over a short chat
 
         window.outputlabel = QtWidgets.QLabel(getMessage("chat-heading-label"))
         window.outputlabel.setObjectName("sectionLabel")
@@ -2794,23 +2765,17 @@ class MainWindow(QtWidgets.QMainWindow):
         window.libraryChip.setObjectName("chipButton")
         window.libraryChip.setToolTip(getMessage("torbox-menu-label").replace("&", "").rstrip("."))
         window.libraryChip.clicked.connect(self.openTorBoxDialog)
-        window.voiceChip = QtWidgets.QPushButton(getMessage("chip-voice-label"))
-        window.voiceChip.setObjectName("chipButton")
-        window.voiceChip.setToolTip(getMessage("chip-voice-tooltip"))
-        window.voiceChip.clicked.connect(self.startVoiceCall)
         window.moreChip = QtWidgets.QToolButton()
         window.moreChip.setObjectName("moreButton")
         window.moreChip.setToolTip(getMessage("chip-more-tooltip"))
         window.moreChip.setPopupMode(QtWidgets.QToolButton.InstantPopup)
         moreMenu = QtWidgets.QMenu(window.moreChip)
         for label, slot in (("chip-subtitles-label", self.openSubtitleDialog), ("chip-library-label", self.openTorBoxDialog),
-                            ("chip-voice-label", self.startVoiceCall), ("chip-private-label", self.newPrivateRoom)):
+                            ("chip-private-label", self.newPrivateRoom)):
             moreMenu.addAction(getMessage(label), slot)
         window.moreChip.setMenu(moreMenu)
         for chip in (window.subtitlesChip, window.libraryChip, window.privateChip):
             chip.hide()  # Still there for the code and shortcuts that use them; the "..." menu is how you reach them now
-        window.voiceChip.hide()
-        window.quickActionsLayout.addWidget(window.voiceChip)
         window.quickActionsLayout.addWidget(window.inviteChip)
         window.quickActionsLayout.addWidget(window.moreChip)
         window.userlistLayout.addLayout(window.quickActionsLayout, 0, 1, Qt.AlignRight)

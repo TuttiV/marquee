@@ -296,6 +296,16 @@ class RestartTests(unittest.TestCase):
         self.assertGreaterEqual(time.time() - started, 1.5)
         self.assertEqual(open(out).read(), "1|7|True|extra")
 
+    def test_a_restart_goes_through_the_launcher_so_the_downloaded_update_gets_installed(self):
+        app = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, app, True)
+        argv = [os.path.join(app, "syncplayClient.py"), "-r", "room"]  # What sys.argv holds inside the running app
+        self.assertEqual(updater.restartArguments(argv, app), argv)  # Run from source: no launcher, same script
+        os.makedirs(os.path.join(app, "program"))
+        launcher = os.path.join(app, "program", "launch-syncplay.pyw")
+        open(launcher, "w").close()
+        self.assertEqual(updater.restartArguments(argv, app), [launcher, "-r", "room"])
+
     def test_relaunch_can_ask_for_the_start_window_by_not_marking_the_restart(self):
         import subprocess
         import sys
