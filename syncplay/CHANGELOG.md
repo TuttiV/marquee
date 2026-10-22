@@ -1,3 +1,9 @@
+## Build 31 - A real Windows Setup wizard
+- New Windows Setup (Setup .exe): the usual wizard with Welcome, a page to pick the install folder (Browse...), a page with separate ticks for the Start menu and desktop shortcuts, and a Finish page that can start the app. No administrator rights needed; it installs to your user's Programs folder by default.
+- Setup adds the app to Settings > Apps (Apps & features) with an Uninstall button, and Help > Uninstall hands over to it. Uninstalling asks whether to keep your settings.
+- Running Setup again repairs or upgrades the app in place and keeps your shortcut choices. A copy unpacked by the single .exe is tidied away once Setup has installed it elsewhere.
+- In-app updates keep working as before, and the version shown under Settings > Apps follows them.
+
 ## Build 30 - The server list is back, and the latest Syncplay
 - Connection settings: the server box shows its drop-down arrow again, so you can pick one of the public Syncplay servers (the current list from syncplay.pl, or syncplay.pl:8995 to 8999 when update checks are off). You can still type any other server. Every other drop-down got the arrow back too.
 - Includes the latest Syncplay changes (upstream 1.7.7 development, October 2026): a fix for a crash and endless reconnecting when a server refuses the connection (it only ever happened on macOS).

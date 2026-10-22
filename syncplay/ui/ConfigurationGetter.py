@@ -509,6 +509,10 @@ class ConfigurationGetter(object):
             configDir = self._config.get('configDir')
             if not configDir or not install.isPackaged() or os.environ.get("MARQUEE_NO_INSTALL_OFFER"):
                 return False
+            if os.name == "nt" and install.installedBySetup(install.rootFolder()):
+                from syncplay import updater
+                install.refreshSetupEntry(updater.BUILD)  # Setup did the installing; keep Apps & features up to date
+                return False
             if secrets.load(install.INSTALL_FLAG, configDir) or secrets.load(install.FLAG, configDir):
                 return False
             from syncplay.vendor.Qt import QtWidgets

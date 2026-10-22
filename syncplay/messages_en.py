@@ -318,6 +318,7 @@ en = {
     "install-folder-hint": "Everything goes in this one folder. Nothing else on your computer is changed.",
     "install-browse": "Browse...",
     "install-folder-needs-new-exe": "To choose a different folder, open the app once from the newest Syncplay Marquee.exe.",
+    "install-folder-setup": "Installed with Setup. To move it, uninstall it (Help > Uninstall) and run Setup again with the new folder.",
     "install-browse-title": "Choose where to install Syncplay Marquee",
     "install-pick-folder": "Choose a folder.",
     "install-menu-windows": "Add to the Start menu",

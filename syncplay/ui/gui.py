@@ -2288,6 +2288,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def uninstallApp(self):
         """Remove the app from this PC (its own folder, shortcuts and link handler), optionally with the person's settings."""
+        root = install.rootFolder()
+        if os.name == "nt" and install.installedBySetup(root):
+            # Installed with the Setup wizard: its own uninstaller removes it, including its Apps & features entry
+            try:
+                install.runSetupUninstaller(root)
+            except OSError as e:
+                QtWidgets.QMessageBox.warning(self, branding.NAME, str(e))
+                return
+            if self._syncplayClient:
+                self._syncplayClient.stop()  # So none of its files are in use while the uninstaller works
+            return
         box = QtWidgets.QMessageBox(self)
         box.setWindowTitle(branding.NAME)
         box.setIcon(QtWidgets.QMessageBox.Warning)
