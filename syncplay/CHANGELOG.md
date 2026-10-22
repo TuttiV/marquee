@@ -1,3 +1,6 @@
+## Build 33 - A tidier Linux package
+- The Linux package (.deb) no longer installs the 32-bit system library libc6-i386, which the app never used. Nothing else changed.
+
 ## Build 32 - A Linux package for Mint and Ubuntu
 - Linux: a proper package to install (marquee_32_amd64.deb). Open it, click Install and enter your password once. It adds mpv if you have no video player, puts the app in the applications menu with its icon, and invite links open it. Made for Linux Mint 21 and 22 and Ubuntu 22.04 or newer.
 - Updates still install from inside the app, without a password: each person runs their own copy of the app files, which Help > Update keeps current. Installing a newer package brings that copy up to date too.

@@ -269,7 +269,8 @@ class BuildTests(unittest.TestCase):
     def test_dependencies_use_the_names_every_supported_release_knows(self):
         found = {"libglib-2.0.so.0": "libglib2.0-0t64:amd64: /usr/lib/x86_64-linux-gnu/libglib-2.0.so.0",
                  "libEGL.so.1": "libegl1:amd64: /usr/lib/x86_64-linux-gnu/libEGL.so.1",
-                 "libc.so.6": "libc6:amd64: /usr/lib/x86_64-linux-gnu/libc.so.6",
+                 "libc.so.6": "libc6-i386: /lib32/libc.so.6\nlibc6:amd64: /usr/lib/x86_64-linux-gnu/libc.so.6",
+                 "libm.so.6": "libc6-i386: /lib32/libm.so.6\nlibc6:amd64: /lib/x86_64-linux-gnu/libm.so.6",
                  "libmystery.so.3": ""}
 
         def run(command, **kw):
