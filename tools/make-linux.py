@@ -296,6 +296,9 @@ def systemLibraries(root):
     return sorted(wanted - provided), glibc
 
 
+LIBRARY_DIRS = {"/lib/x86_64-linux-gnu", "/usr/lib/x86_64-linux-gnu", "/lib64", "/usr/lib64", "/lib", "/usr/lib"}
+
+
 def debianDepends(root):
     """The Depends line: the packages that hold the system libraries the bundle links to, looked up on this (Debian or
     Ubuntu) build machine. Ubuntu 24.04 renamed some for its 64-bit time change ("...t64"); those still answer to the
@@ -307,7 +310,9 @@ def debianDepends(root):
         found = None
         for line in out.splitlines():
             owners, _, path = line.partition(": ")
-            if os.path.basename(path.strip()) == soname and "/lib" in path:
+            path = path.strip()
+            # Only the 64-bit library folders: a build machine with 32-bit libraries also has /lib32/libc.so.6 and such
+            if os.path.basename(path) == soname and os.path.dirname(path) in LIBRARY_DIRS:
                 found = owners.split(",")[0].strip().split(":")[0]
                 break
         if found:
