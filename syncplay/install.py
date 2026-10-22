@@ -25,6 +25,31 @@ REG_VALUE = "InstallDir"
 DESKTOP_ID = "syncplay-marquee"
 LINUX = sys.platform.startswith("linux")
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+SETUP_UNINSTALLER = "Uninstall Syncplay Marquee.exe"  # Put next to the app by the Windows Setup wizard (tools/make-setup.py)
+SETUP_UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\SyncplayMarquee"  # Its Apps & features entry
+
+
+def installedBySetup(root):
+    """True when the Windows Setup wizard installed this copy: then Setup owns the folder, its uninstaller and its entry
+    in Apps & features, and the app's own first-start install window stays away."""
+    return bool(root) and os.path.isfile(os.path.join(root, SETUP_UNINSTALLER))
+
+
+def runSetupUninstaller(root, popen=subprocess.Popen):
+    """Start Setup's own uninstaller (it asks for confirmation itself). Raises OSError if it can't be started."""
+    popen([os.path.join(root, SETUP_UNINSTALLER)], close_fds=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+          stderr=subprocess.DEVNULL)
+
+
+def refreshSetupEntry(build, reg=None):
+    """After an in-app update, keep the version shown in Apps & features in step (best effort, Windows only)."""
+    try:
+        reg = _winreg(reg)
+        with reg.OpenKey(reg.HKEY_CURRENT_USER, SETUP_UNINSTALL_KEY, 0, reg.KEY_READ | reg.KEY_WRITE) as key:
+            if reg.QueryValueEx(key, "DisplayVersion")[0] != "Build {}".format(build):
+                reg.SetValueEx(key, "DisplayVersion", 0, reg.REG_SZ, "Build {}".format(build))
+    except (OSError, ImportError):
+        pass
 
 
 def appFolder():

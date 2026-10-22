@@ -56,9 +56,12 @@ class InstallDialog(QtWidgets.QDialog):
         row.addWidget(self.folderEdit, 1)
         row.addWidget(self.browseButton)
         layout.addLayout(row)
-        # An older .exe doesn't say where it is and doesn't read the chosen folder, so moving needs the new one
-        self.canMove = install.LINUX or os.name != "nt" or bool(exePath and os.path.isfile(exePath))
-        self.folderHint = QtWidgets.QLabel(getMessage("install-folder-hint" if self.canMove else "install-folder-needs-new-exe"))
+        # An older .exe doesn't say where it is and doesn't read the chosen folder, so moving needs the new one; a copy the
+        # Setup wizard installed is Setup's to move (its uninstaller and Apps & features entry point at this folder)
+        bySetup = install.installedBySetup(currentRoot)
+        self.canMove = not bySetup and (install.LINUX or os.name != "nt" or bool(exePath and os.path.isfile(exePath)))
+        hint = "install-folder-setup" if bySetup else ("install-folder-hint" if self.canMove else "install-folder-needs-new-exe")
+        self.folderHint = QtWidgets.QLabel(getMessage(hint))
         self.folderHint.setObjectName("hint")
         self.folderHint.setWordWrap(True)
         layout.addWidget(self.folderHint)

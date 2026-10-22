@@ -8,6 +8,7 @@
  * The folder can be changed in the app's install window; the choice is kept in HKCU\Software\Syncplay Marquee (InstallDir)
  * and read here, so every copy of the .exe starts the installed app. The app is told where this .exe is (MARQUEE_EXE) so
  * the install window can put a copy of it in the install folder for the shortcuts.
+ * Setup (tools/make-setup.py) installs this same launcher with nothing appended: it then starts the app in its own folder.
  * Test hooks: MARQUEE_HOME overrides the install folder; MARQUEE_NO_LAUNCH=1 unpacks and exits without starting.
  * Build: x86_64-w64-mingw32-gcc -O2 -mwindows -municode -static stub.c stub.res.o -lcomctl32 (see tools/make-exe.py). */
 #ifndef UNICODE
@@ -183,7 +184,7 @@ static unsigned readNumber(const wchar_t *path) {
 typedef struct {
     wchar_t exePath[MAX_PATH * 2], root[2048], pyDir[2048], appDir[2048], pyMarker[2048], appMarker[2048];
     Trailer trailer;
-    int needRuntime, needApp, ok;
+    int needRuntime, needApp, ok, installed;
 } Setup;
 
 static DWORD WINAPI setupThread(LPVOID param) {
@@ -373,6 +374,63 @@ static int runSetup(Setup *setup, HINSTANCE instance) {
     return setup->ok ? 0 : 1;
 }
 
+/* -------------------------------------------------------------------------------------------- launching ---- */
+/* Setup (the wizard installer) puts this launcher next to the app with nothing packed inside it: the app to start is the
+ * one in this file's own folder (a python-<stamp> runtime and app\). Returns 1 when that layout is there. */
+static int findInstalled(Setup *setup) {
+    wcscpy(setup->root, setup->exePath);
+    wchar_t *slash = wcsrchr(setup->root, L'\\');
+    if (!slash) return 0;
+    *slash = 0;
+    _snwprintf(setup->appDir, 2048, L"%ls\\app", setup->root);
+    wchar_t script[2048], pattern[2048];
+    _snwprintf(script, 2048, L"%ls\\program\\launch-syncplay.pyw", setup->appDir);
+    if (!exists(script)) return 0;
+    _snwprintf(pattern, 2048, L"%ls\\python-*", setup->root);
+    WIN32_FIND_DATAW data;
+    HANDLE find = FindFirstFileW(pattern, &data);
+    int found = 0;
+    if (find != INVALID_HANDLE_VALUE) {
+        do {
+            if (!(data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+            wchar_t python[2048];
+            _snwprintf(python, 2048, L"%ls\\%ls\\pythonw.exe", setup->root, data.cFileName);
+            if (exists(python)) { _snwprintf(setup->pyDir, 2048, L"%ls\\%ls", setup->root, data.cFileName); found = 1; }
+        } while (!found && FindNextFileW(find, &data));
+        FindClose(find);
+    }
+    setup->installed = found;
+    return found;
+}
+
+/* Start the app with pythonw.exe (no console), passing on this file's own arguments. */
+static int launch(Setup *setup, LPWSTR arguments) {
+    wchar_t noLaunch[8];
+    if (GetEnvironmentVariableW(L"MARQUEE_NO_LAUNCH", noLaunch, 8) > 0) return 0;
+
+    SetEnvironmentVariableW(L"MARQUEE_EXE", setup->exePath);  /* Inherited by the app */
+    static wchar_t python[2048], script[2048], command[65536];
+    _snwprintf(python, 2048, L"%ls\\pythonw.exe", setup->pyDir);
+    _snwprintf(script, 2048, L"%ls\\program\\launch-syncplay.pyw", setup->appDir);
+    _snwprintf(command, 65536, L"\"%ls\" \"%ls\" %ls", python, script, arguments ? arguments : L"");
+    STARTUPINFOW startup;
+    PROCESS_INFORMATION process;
+    ZeroMemory(&startup, sizeof(startup));
+    startup.cb = sizeof(startup);
+    if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, setup->appDir, &startup, &process)) {
+        wchar_t message[2400];
+        if (setup->installed)
+            _snwprintf(message, 2400, L"Could not start Syncplay Marquee from %ls. Run Setup again to repair it.", setup->root);
+        else
+            _snwprintf(message, 2400, L"Could not start Syncplay Marquee. Delete the folder %ls and open this file again.", setup->root);
+        MessageBoxW(NULL, message, TITLE, MB_ICONERROR);
+        return 1;
+    }
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return 0;
+}
+
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR arguments, int show) {
     static Setup setup;
     DWORD n = GetModuleFileNameW(NULL, setup.exePath, MAX_PATH * 2);
@@ -388,6 +446,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR arguments, in
     SetFilePointerEx(exe, pos, NULL, FILE_BEGIN);
     if (!ReadFile(exe, &setup.trailer, sizeof(Trailer), &got, NULL) || got != sizeof(Trailer) || memcmp(setup.trailer.magic, MAGIC, 8) != 0) {
         CloseHandle(exe);
+        if (findInstalled(&setup)) return launch(&setup, arguments);  /* The launcher Setup installed next to the app */
         MessageBoxW(NULL, L"This file is damaged (the packed app is missing). Please download it again.", TITLE, MB_ICONERROR);
         return 1;
     }
@@ -438,25 +497,5 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, LPWSTR arguments, in
         }
     }
 
-    wchar_t noLaunch[8];
-    if (GetEnvironmentVariableW(L"MARQUEE_NO_LAUNCH", noLaunch, 8) > 0) return 0;
-
-    SetEnvironmentVariableW(L"MARQUEE_EXE", setup.exePath);  /* Inherited by the app */
-    static wchar_t python[2048], script[2048], command[65536];
-    _snwprintf(python, 2048, L"%ls\\pythonw.exe", setup.pyDir);
-    _snwprintf(script, 2048, L"%ls\\program\\launch-syncplay.pyw", setup.appDir);
-    _snwprintf(command, 65536, L"\"%ls\" \"%ls\" %ls", python, script, arguments ? arguments : L"");
-    STARTUPINFOW startup;
-    PROCESS_INFORMATION process;
-    ZeroMemory(&startup, sizeof(startup));
-    startup.cb = sizeof(startup);
-    if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, setup.appDir, &startup, &process)) {
-        wchar_t message[2400];
-        _snwprintf(message, 2400, L"Could not start Syncplay Marquee. Delete the folder %ls and open this file again.", setup.root);
-        MessageBoxW(NULL, message, TITLE, MB_ICONERROR);
-        return 1;
-    }
-    CloseHandle(process.hThread);
-    CloseHandle(process.hProcess);
-    return 0;
+    return launch(&setup, arguments);
 }
