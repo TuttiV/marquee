@@ -1,3 +1,10 @@
+## Build 32 - A Linux package for Mint and Ubuntu
+- Linux: a proper package to install (marquee_32_amd64.deb). Open it, click Install and enter your password once. It adds mpv if you have no video player, puts the app in the applications menu with its icon, and invite links open it. Made for Linux Mint 21 and 22 and Ubuntu 22.04 or newer.
+- Updates still install from inside the app, without a password: each person runs their own copy of the app files, which Help > Update keeps current. Installing a newer package brings that copy up to date too.
+- Help > Uninstall removes the package (your system asks for your password). You can also remove it like any other package.
+- Coming from the .tar.xz version: the first start from the package moves your desktop shortcut over and removes the old copy. Your settings stay.
+- The Linux downloads are smaller: Qt's developer tools are no longer included.
+
 ## Build 31 - A real Windows Setup wizard
 - New Windows Setup (Setup .exe): the usual wizard with Welcome, a page to pick the install folder (Browse...), a page with separate ticks for the Start menu and desktop shortcuts, and a Finish page that can start the app. No administrator rights needed; it installs to your user's Programs folder by default.
 - Setup adds the app to Settings > Apps (Apps & features) with an Uninstall button, and Help > Uninstall hands over to it. Uninstalling asks whether to keep your settings.
