@@ -58,15 +58,22 @@ class InstallDialog(QtWidgets.QDialog):
         layout.addLayout(row)
         # An older .exe doesn't say where it is and doesn't read the chosen folder, so moving needs the new one; a copy the
         # Setup wizard installed is Setup's to move (its uninstaller and Apps & features entry point at this folder)
+        # The .deb package's files are the system's to place (and its menu entry is the package's own)
         bySetup = install.installedBySetup(currentRoot)
-        self.canMove = not bySetup and (install.LINUX or os.name != "nt" or bool(exePath and os.path.isfile(exePath)))
-        hint = "install-folder-setup" if bySetup else ("install-folder-hint" if self.canMove else "install-folder-needs-new-exe")
+        byPackage = install.installedByPackage()
+        self.canMove = not (bySetup or byPackage) and (install.LINUX or os.name != "nt" or bool(exePath and os.path.isfile(exePath)))
+        if byPackage:
+            hint = "install-folder-package"
+        else:
+            hint = "install-folder-setup" if bySetup else ("install-folder-hint" if self.canMove else "install-folder-needs-new-exe")
         self.folderHint = QtWidgets.QLabel(getMessage(hint))
         self.folderHint.setObjectName("hint")
         self.folderHint.setWordWrap(True)
         layout.addWidget(self.folderHint)
         if not self.canMove:
-            self.folderEdit.setText(currentRoot)
+            self.folderEdit.blockSignals(True)  # Nothing to check yet: the rest of the window doesn't exist
+            self.folderEdit.setText(install.packageFolder() if byPackage else currentRoot)
+            self.folderEdit.blockSignals(False)
             self.folderEdit.setEnabled(False)
             self.browseButton.setEnabled(False)
 
@@ -77,6 +84,7 @@ class InstallDialog(QtWidgets.QDialog):
         self.menuCheck.setChecked(True if firstTime else existing["menu"])
         self.desktopCheck = QtWidgets.QCheckBox(getMessage("install-desktop"))
         self.desktopCheck.setChecked(False if firstTime else existing["desktop"])
+        self.menuCheck.setEnabled(not byPackage)
         layout.addWidget(self.menuCheck)
         layout.addWidget(self.desktopCheck)
 
@@ -117,6 +125,8 @@ class InstallDialog(QtWidgets.QDialog):
         return label
 
     def target(self):
+        if not self.canMove and self.currentRoot:
+            return self.currentRoot
         return install.targetRoot(self.folderEdit.text())
 
     def moving(self):
@@ -161,8 +171,9 @@ class InstallDialog(QtWidgets.QDialog):
             self._setShortcuts(target, self.menuCheck.isChecked(), self.desktopCheck.isChecked())
         except (OSError, ValueError) as e:
             self.progress.hide()
-            for widget in (self.installButton, self.cancelButton, self.menuCheck, self.desktopCheck):
+            for widget in (self.installButton, self.cancelButton, self.desktopCheck):
                 widget.setEnabled(True)
+            self.menuCheck.setEnabled(not install.installedByPackage())
             for widget in (self.browseButton, self.folderEdit):
                 widget.setEnabled(self.canMove)
             self._check()

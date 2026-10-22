@@ -6,9 +6,10 @@ name: Publish release
 #   - change the number in release-build.txt on main (for example to 26), or
 #   - push a tag like v26.
 # The release is named "Build N", the zip is attached as marquee-vN.zip, and the notes come from syncplay/CHANGELOG.md.
-# The Linux download (marquee-linux-x86_64-vN.tar.xz) is built and attached too; if that build fails the zip still ships.
-# A build number that already has a release is skipped, so re-running is harmless. The one exception: a release that
-# is missing its Linux download gets it added (changing this file on main also starts a run, to fill that in).
+# The Linux downloads (marquee-linux-x86_64-vN.tar.xz and the package marquee_N_amd64.deb) are built and attached too;
+# if that build fails the zip still ships. A build number that already has a release is skipped, so re-running is
+# harmless. The one exception: a release that is missing a Linux download gets it added (changing this file on main also
+# starts a run, to fill that in).
 on:
   push:
     branches:
@@ -24,7 +25,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Fixed: the package's dependency names are read from this system
     steps:
       - uses: actions/checkout@v4
 
@@ -41,11 +42,11 @@ jobs:
           if [ "$REF_TYPE" = "tag" ]; then build="${TAG#v}"; else build="$(tr -d '[:space:]' < release-build.txt)"; fi
           case "$build" in ''|*[!0-9]*) echo "Build number must be digits, got: $build"; exit 1;; esac
           if gh release view "v${build}" --json assets --jq '.assets[].name' > assets.txt 2>/dev/null; then
-            if grep -qx "marquee-linux-x86_64-v${build}.tar.xz" assets.txt; then
+            if grep -qx "marquee-linux-x86_64-v${build}.tar.xz" assets.txt && grep -qx "marquee_${build}_amd64.deb" assets.txt; then
               echo "Build ${build} already has a release; nothing to do."
               echo "SKIP=1" >> "$GITHUB_ENV"
             else
-              echo "Build ${build} is released without the Linux download; adding it."
+              echo "Build ${build} is released without a Linux download; adding it."
               echo "LINUX_ONLY=1" >> "$GITHUB_ENV"
             fi
           fi
@@ -58,7 +59,8 @@ jobs:
           mv "dist/Syncplay-Marquee-v${BUILD}.zip" "dist/marquee-v${BUILD}.zip"
 
       # The builder test-imports Qt, which needs the graphics libraries every Linux desktop has but this server lacks.
-      - name: Build the Linux download
+      # The package's dependencies are looked up from the libraries installed here, so they are all installed first.
+      - name: Build the Linux downloads
         if: env.SKIP != '1'
         continue-on-error: ${{ env.LINUX_ONLY != '1' }}
         env:
@@ -67,7 +69,7 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends libegl1 libgl1 libfontconfig1 libfreetype6 libxkbcommon0 \
             libdbus-1-3 libx11-6 libx11-xcb1 libxcb1 libxcb-glx0 libxcb-randr0 libxcb-render0 libxcb-shape0 libxcb-shm0 \
-            libxcb-sync1 libxcb-xfixes0
+            libxcb-sync1 libxcb-xfixes0 libglib2.0-0t64 libgssapi-krb5-2 libbrotli1 libzstd1 zlib1g libcrypt1
           printf '{"updateRepo": "%s"}\n' "$REPO" > linux-defaults.json
           python tools/make-linux.py --build "$BUILD" --defaults linux-defaults.json --out dist
 
@@ -87,6 +89,9 @@ jobs:
           linux = "dist/marquee-linux-x86_64-v%d.tar.xz" % build
           if os.path.isfile(linux):
               sums.append("Linux sha256: " + sha(linux))
+          deb = "dist/marquee_%d_amd64.deb" % build
+          if os.path.isfile(deb):
+              sums.append("Linux .deb sha256: " + sha(deb))
           open("notes.md", "w", encoding="utf-8").write("\n".join(lines) + "\n\n" + "\n".join(sums) + "\n")
           PY
 
@@ -96,17 +101,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           assets=("dist/marquee-v${BUILD}.zip")
-          linux="dist/marquee-linux-x86_64-v${BUILD}.tar.xz"
-          if [ -f "$linux" ]; then assets+=("$linux"); fi
+          for linux in "dist/marquee-linux-x86_64-v${BUILD}.tar.xz" "dist/marquee_${BUILD}_amd64.deb"; do
+            if [ -f "$linux" ]; then assets+=("$linux"); fi
+          done
           gh release create "v${BUILD}" "${assets[@]}" --title "Build ${BUILD}" --notes-file notes.md --target "$GITHUB_SHA"
 
-      - name: Add the Linux download to the existing release
+      - name: Add the missing Linux downloads to the existing release
         if: env.LINUX_ONLY == '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          linux="dist/marquee-linux-x86_64-v${BUILD}.tar.xz"
-          gh release upload "v${BUILD}" "$linux"
           body="$(gh release view "v${BUILD}" --json body --jq .body)"
-          printf '%s\nLinux sha256: %s\n' "$body" "$(sha256sum "$linux" | cut -d' ' -f1)" > notes.md
+          for linux in "dist/marquee-linux-x86_64-v${BUILD}.tar.xz" "dist/marquee_${BUILD}_amd64.deb"; do
+            name="$(basename "$linux")"
+            if grep -qx "$name" assets.txt; then continue; fi
+            gh release upload "v${BUILD}" "$linux"
+            case "$name" in *.deb) label="Linux .deb sha256";; *) label="Linux sha256";; esac
+            body="$(printf '%s\n%s: %s' "$body" "$label" "$(sha256sum "$linux" | cut -d' ' -f1)")"
+          done
+          printf '%s\n' "$body" > notes.md
           gh release edit "v${BUILD}" --notes-file notes.md

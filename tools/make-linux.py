@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Builds the Linux download: a folder with its own Python, every library and the app, packed as a .tar.xz.
+"""Builds the Linux downloads: a folder with its own Python, every library and the app, packed as a .tar.xz, and the same
+files as a .deb package for Linux Mint, Ubuntu and Debian (double-click it, Install, and it is in the applications menu).
 
     python tools/make-linux.py --build 27 [--defaults path/to/syncplay-defaults.json] [--out dist]
 
@@ -8,12 +9,18 @@ Python (python-build-standalone), PySide6 and the few X11 helper libraries Qt ne
 The person extracts the archive and opens "Syncplay Marquee"; the first start shows the install window (folder, menu and
 desktop shortcuts). The in-app Update keeps the app files current, exactly like on Windows.
 
-Needs: python3, pip, binutils (readelf) and dpkg-deb. Downloads are cached in <out>/cache."""
+The .deb puts everything in /opt/syncplay-marquee with a menu entry, an icon and the invite-link handler in the system's
+own places. Those files belong to the system, so its start script runs each person's own copy of the app files
+(~/.local/share/syncplay-marquee/app, copied from the package on first start), which the in-app Update keeps current;
+a newer package replaces that copy. It depends on the system libraries the bundle links to and on mpv or VLC.
+
+Needs: python3, pip, binutils (readelf) and dpkg (dpkg-deb, dpkg -S). Downloads are cached in <out>/cache."""
 import argparse
 import glob
 import hashlib
 import importlib.util
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -48,7 +55,9 @@ QT_PLUGINS = ["platforms/libqxcb.so", "xcbglintegrations/*.so", "imageformats/li
               "imageformats/libqgif.so", "imageformats/libqjpeg.so", "iconengines/libqsvgicon.so", "platforminputcontexts/*.so",
               "platformthemes/libqxdgdesktopportal.so"]
 QT_TRIM_DIRS = ["examples", "glue", "include", "typesystems", "scripts", "support", "Qt/qml", "Qt/translations", "Qt/metatypes",
-                "Qt/resources", "Qt/libexec"]
+                "Qt/resources", "Qt/libexec", "doc", "lib",
+                # Qt's developer tools (they link to Qt parts that aren't kept, so they couldn't even start)
+                "assistant", "designer", "linguist", "lrelease", "lupdate", "qmlformat", "qmllint", "qmlls", "svgtoqml"]
 PY_TRIM = ["lib/python3.11/test", "lib/python3.11/idlelib", "lib/python3.11/tkinter", "lib/python3.11/turtledemo",
            "lib/python3.11/lib2to3", "lib/python3.11/ensurepip", "lib/python3.11/lib-dynload/_tkinter*", "lib/python3.11/config-3.11*",
            "lib/libtcl*", "lib/libtk*", "lib/tcl8*", "lib/tk8*", "lib/itcl*", "lib/thread*", "lib/Tix*", "share", "include",
@@ -194,6 +203,172 @@ Updates install themselves from inside the app (Help > Update, or the bar that a
 """
 
 
+PACKAGE = "syncplay-marquee"
+PACKAGE_DIR = "/opt/" + PACKAGE
+
+PACKAGE_LAUNCHER = """#!/bin/sh
+# Starts Syncplay Marquee from the .deb package. The package's files belong to the system and can't change, so each person
+# runs their own copy of the app files, which the in-app Update keeps current. A newer package replaces that copy.
+base="$(dirname "$(readlink -f "$0")")"
+data="${XDG_DATA_HOME:-$HOME/.local/share}/syncplay-marquee"
+build() { sed -n 's/^BUILD *= *\\([0-9][0-9]*\\).*/\\1/p' "$1/syncplay/private_build.py" 2>/dev/null | head -n 1; }
+have="$(build "$data/app")"
+want="$(build "$base/app")"
+if [ ! -f "$data/app/program/launch-syncplay.pyw" ] || [ "${have:-0}" -lt "${want:-0}" ]; then
+    rm -rf "$data/app.new"
+    if mkdir -p "$data" && cp -R "$base/app" "$data/app.new"; then
+        rm -rf "$data/app" && mv "$data/app.new" "$data/app"
+    fi
+fi
+app="$data/app"
+[ -f "$app/program/launch-syncplay.pyw" ] || app="$base/app"  # No writable home folder: run the package's own copy
+export PYTHONNOUSERSITE=1 MARQUEE_PACKAGE="$base"
+unset PYTHONHOME PYTHONPATH
+exec "$base/runtime/bin/python3" "$app/program/launch-syncplay.pyw" "$@"
+"""
+
+DESKTOP_ENTRY = """[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Syncplay Marquee
+GenericName=Watch together
+Comment=Watch videos in sync with friends
+Exec=syncplay-marquee %u
+Icon=syncplay-marquee
+Terminal=false
+Categories=AudioVideo;Video;Network;
+Keywords=sync;watch;together;video;mpv;vlc;
+MimeType=x-scheme-handler/syncplay-marquee;
+StartupNotify=true
+StartupWMClass=syncplay-marquee
+"""
+
+COPYRIGHT = """Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Syncplay Marquee
+Source: https://github.com/TuttiV/marquee
+
+Files: *
+License: Apache-2.0
+ On Debian systems the full text of the Apache License 2.0 is in /usr/share/common-licenses/Apache-2.0.
+ The bundled components (Python, Qt for Python, Twisted and their dependencies) keep their own licences,
+ which are included with each of them under /opt/syncplay-marquee/runtime.
+"""
+
+CONTROL = """Package: {package}
+Version: {build}
+Architecture: amd64
+Maintainer: TuttiV <TuttiV@users.noreply.github.com>
+Installed-Size: {size}
+Depends: {depends}
+Section: video
+Priority: optional
+Homepage: https://github.com/TuttiV/marquee
+Description: Watch videos in sync with friends
+ Syncplay Marquee keeps everyone's video player (mpv or VLC) at the same
+ moment: play, pause and seek together, with chat, invite links and shared
+ subtitles. It keeps itself up to date from inside the app.
+"""
+
+
+def isElf(path):
+    try:
+        with open(path, "rb") as f:
+            return f.read(4) == b"\x7fELF"
+    except OSError:
+        return False
+
+
+def systemLibraries(root):
+    """(sonames, glibc) the bundle needs from the system: what its programs and libraries link to that it doesn't carry
+    itself, and the newest C library version any of them asks for."""
+    provided, wanted, glibc = set(), set(), (2, 17)
+    for folder, _, files in os.walk(root):
+        for name in files:
+            path = os.path.join(folder, name)
+            if ".so" in name:
+                provided.add(name)
+            if os.path.islink(path) or not isElf(path):
+                continue
+            wanted.update(os.path.basename(name) for name in needed(path))  # Some name a path ($ORIGIN/../lib/...)
+            versions = subprocess.run(["readelf", "-V", path], capture_output=True, text=True).stdout
+            for major, minor in re.findall(r"Name: GLIBC_(\d+)\.(\d+)", versions):
+                glibc = max(glibc, (int(major), int(minor)))
+    return sorted(wanted - provided), glibc
+
+
+def debianDepends(root):
+    """The Depends line: the packages that hold the system libraries the bundle links to, looked up on this (Debian or
+    Ubuntu) build machine. Ubuntu 24.04 renamed some for its 64-bit time change ("...t64"); those still answer to the
+    old names, which Ubuntu 22.04 and Linux Mint 21 use, so the old names are used."""
+    sonames, glibc = systemLibraries(root)
+    packages, unknown = set(), []
+    for soname in sonames:
+        out = subprocess.run(["dpkg", "-S", "*/" + soname], capture_output=True, text=True).stdout
+        found = None
+        for line in out.splitlines():
+            owners, _, path = line.partition(": ")
+            if os.path.basename(path.strip()) == soname and "/lib" in path:
+                found = owners.split(",")[0].strip().split(":")[0]
+                break
+        if found:
+            packages.add(re.sub(r"t64$", "", found))
+        else:
+            unknown.append(soname)
+    if unknown:
+        print("No package found on this machine for:", ", ".join(unknown))
+    packages.discard("libc6")
+    # A video player is part of what it needs: the system's installer adds mpv when neither is there
+    return ", ".join(["libc6 (>= {}.{})".format(*glibc)] + sorted(packages) + ["mpv | vlc"])
+
+
+def normalisePermissions(top):
+    for folder, dirs, files in os.walk(top):
+        os.chmod(folder, 0o755)
+        for name in files:
+            path = os.path.join(folder, name)
+            if not os.path.islink(path):
+                os.chmod(path, 0o755 if os.stat(path).st_mode & 0o111 else 0o644)
+
+
+def buildDeb(root, build, out):
+    """Package the finished folder as a .deb. Returns its path."""
+    stage = os.path.join(os.path.dirname(root), "deb")
+    shutil.rmtree(stage, ignore_errors=True)
+    target = os.path.join(stage, PACKAGE_DIR.lstrip("/"))
+    os.makedirs(target)
+    for part in ("runtime", "app"):
+        shutil.copytree(os.path.join(root, part), os.path.join(target, part), symlinks=True)
+    # The package's files can't be written to later, so compile the Python files now (or every start would)
+    subprocess.run([os.path.join(target, "runtime", "bin", "python3"), "-m", "compileall", "-q", "-j0", "-s", stage, "-p", "/",
+                    os.path.join(target, "runtime", "lib")], check=True, env=dict(os.environ, PYTHONNOUSERSITE="1"))
+    launcher = os.path.join(target, PACKAGE)
+    with open(launcher, "w") as f:
+        f.write(PACKAGE_LAUNCHER)
+    os.chmod(launcher, 0o755)
+    files = {"usr/share/applications/{}.desktop".format(PACKAGE): DESKTOP_ENTRY, "usr/share/doc/{}/copyright".format(PACKAGE): COPYRIGHT}
+    for relative, text in files.items():
+        path = os.path.join(stage, relative)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(text)
+    icon = os.path.join(stage, "usr", "share", "icons", "hicolor", "256x256", "apps", PACKAGE + ".png")
+    os.makedirs(os.path.dirname(icon))
+    shutil.copyfile(os.path.join(root, "app", "syncplay", "resources", "syncplay.png"), icon)
+    os.makedirs(os.path.join(stage, "usr", "bin"))
+    os.symlink(os.path.join(PACKAGE_DIR, PACKAGE), os.path.join(stage, "usr", "bin", PACKAGE))
+    normalisePermissions(stage)
+
+    size = sum(os.lstat(os.path.join(folder, name)).st_size for folder, _, names in os.walk(stage) for name in names)
+    debian = os.path.join(stage, "DEBIAN")
+    os.makedirs(debian)
+    with open(os.path.join(debian, "control"), "w") as f:
+        f.write(CONTROL.format(package=PACKAGE, build=build, size=(size + 1023) // 1024, depends=debianDepends(target)))
+    os.chmod(os.path.join(debian, "control"), 0o644)
+    deb = os.path.join(out, "marquee_{}_amd64.deb".format(build))
+    subprocess.run(["dpkg-deb", "--root-owner-group", "-Zxz", "-z9", "--build", stage, deb], check=True, stdout=subprocess.DEVNULL)
+    return deb
+
+
 def verify(root):
     python = os.path.join(root, "runtime", "bin", "python3")
     env = dict(os.environ, PYTHONNOUSERSITE="1", QT_QPA_PLATFORM="xcb")
@@ -239,8 +414,10 @@ def main():
     archive = os.path.join(args.out, "marquee-linux-x86_64-v{}.tar.xz".format(args.build))
     with tarfile.open(archive, "w:xz", preset=9) as tar:
         tar.add(root, arcname=FOLDER)
-    digest = hashlib.sha256(open(archive, "rb").read()).hexdigest()
-    print("Built {} - {:.1f} MB, build {} (sha256 {})".format(archive, os.path.getsize(archive) / 1e6, args.build, digest))
+    deb = buildDeb(root, args.build, args.out)
+    for path in (archive, deb):
+        digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
+        print("Built {} - {:.1f} MB, build {} (sha256 {})".format(path, os.path.getsize(path) / 1e6, args.build, digest))
 
 
 if __name__ == "__main__":

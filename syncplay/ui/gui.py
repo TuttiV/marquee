@@ -2299,24 +2299,48 @@ class MainWindow(QtWidgets.QMainWindow):
             if self._syncplayClient:
                 self._syncplayClient.stop()  # So none of its files are in use while the uninstaller works
             return
+        byPackage = install.installedByPackage()
         box = QtWidgets.QMessageBox(self)
         box.setWindowTitle(branding.NAME)
         box.setIcon(QtWidgets.QMessageBox.Warning)
-        box.setText(getMessage("uninstall-confirm"))
+        box.setText(getMessage("uninstall-confirm-package" if byPackage else "uninstall-confirm"))
         settingsBox = QtWidgets.QCheckBox(getMessage("uninstall-settings-checkbox"))
         box.setCheckBox(settingsBox)
         box.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel)
         box.setDefaultButton(QtWidgets.QMessageBox.Cancel)
         if box.exec_() != QtWidgets.QMessageBox.Yes:
             return
+        if byPackage and not self._removePackage():
+            return
         try:
             install.uninstall(self.config.get("configDir"), settingsBox.isChecked())
         except (OSError, ValueError) as e:
             QtWidgets.QMessageBox.warning(self, branding.NAME, str(e))
             return
-        QtWidgets.QMessageBox.information(self, branding.NAME, getMessage("uninstall-done"))
+        QtWidgets.QMessageBox.information(self, branding.NAME, getMessage("uninstall-done-package" if byPackage else "uninstall-done"))
         if self._syncplayClient:
             self._syncplayClient.stop()
+
+    def _removePackage(self):
+        """Remove the .deb package (the system asks for the password). True once it is gone; otherwise says why not."""
+        try:
+            process = install.removePackage()
+        except OSError as e:
+            QtWidgets.QMessageBox.warning(self, branding.NAME, getMessage("uninstall-package-failed").format(e))
+            return False
+        QtWidgets.QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            while process.poll() is None:  # Keep the window drawn while the password window is up
+                QtWidgets.QApplication.processEvents(QtCore.QEventLoop.AllEvents, 100)
+                time.sleep(0.05)
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+        if process.returncode == 0:
+            return True
+        if process.returncode != 126:  # 126: the password window was closed, which says enough on its own
+            QtWidgets.QMessageBox.warning(self, branding.NAME, getMessage("uninstall-package-failed").format(
+                "exit code {}".format(process.returncode)))
+        return False
 
     def _instanceTick(self):
         """Every couple of seconds: tell other launches this copy is running, and open any invite links they handed over."""
@@ -2341,7 +2365,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.config.get("configDir"):
             return
         try:
-            linuxRoot = install.rootFolder() if (install.LINUX and install.isPackaged()) else None
+            # The .deb package's own menu entry handles the links, so only the download version registers a handler
+            linuxRoot = install.rootFolder() if (install.LINUX and install.isPackaged() and not install.installedByPackage()) else None
             available = bool(linuxRoot) or inviteLinks.handlerAvailable()
             self.inviteLinksAction.setVisible(available)  # Only meaningful for the installed app
             off = secrets.load(inviteLinks.SETTING, self.config.get("configDir")) == "off"

@@ -500,6 +500,22 @@ class ConfigurationGetter(object):
         except Exception:
             return True  # Never warn about a missing player because the check itself failed
 
+    @staticmethod
+    def _installedOnLinux():
+        try:
+            from syncplay import install
+            return install.LINUX and install.isPackaged()
+        except Exception:
+            return False
+
+    def _desktopFileName(self):
+        """Lets the desktop match the window to its menu entry (icon, taskbar grouping); Wayland goes by this name."""
+        return "syncplay-marquee" if self._installedOnLinux() else "syncplay"
+
+    def _windowClassArguments(self):
+        """On X11 the desktop goes by the window's class, which would otherwise be "syncplayClient.py"."""
+        return ["-name", "syncplay-marquee"] if self._installedOnLinux() else []
+
     def _offerInstall(self):
         """First start of the packaged app (Windows .exe or the Linux download): the install window, until it is installed.
         Returns True when this copy should quit: the install was cancelled, or the app was copied to another folder and
@@ -512,6 +528,9 @@ class ConfigurationGetter(object):
             if os.name == "nt" and install.installedBySetup(install.rootFolder()):
                 from syncplay import updater
                 install.refreshSetupEntry(updater.BUILD)  # Setup did the installing; keep Apps & features up to date
+                return False
+            if install.installedByPackage():
+                install.adoptPackage()  # The .deb package did the installing; retire an older download version's leftovers
                 return False
             if secrets.load(install.INSTALL_FLAG, configDir) or secrets.load(install.FLAG, configDir):
                 return False
@@ -666,8 +685,8 @@ class ConfigurationGetter(object):
                 if not (IsPySide6 or IsPySide2 or IsPySide):
                     raise ImportError("Failed to identify compatible version of PySide.")
                 if QCoreApplication.instance() is None:
-                    self.app = QtWidgets.QApplication(sys.argv)
-                    self.app.setDesktopFileName("syncplay")
+                    self.app = QtWidgets.QApplication(sys.argv + self._windowClassArguments())
+                    self.app.setDesktopFileName(self._desktopFileName())
                     if isWindows():
                         try:
                             from syncplay.vendor import darkdetect

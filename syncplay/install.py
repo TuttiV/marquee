@@ -6,6 +6,9 @@ The packaged app always lives in a folder called "Syncplay Marquee" with the app
   is remembered in the registry, which the .exe reads). The Python runtime sits in a "python-..." subfolder.
 - Linux: the folder from the download (or the one it was installed to), with the Python runtime in "runtime" and a
   "Syncplay Marquee" start script.
+- Linux .deb package: the runtime and the app files in /opt/syncplay-marquee (read-only), with the menu entry, icon and
+  link handler in the system's own places. Its start script runs each person's own copy of the app files from
+  ~/.local/share/syncplay-marquee/app, which is what the in-app Update keeps current (a newer package replaces it).
 Everything here only ever touches this app's own folder, its shortcuts and its link handler."""
 import os
 import shutil
@@ -27,6 +30,10 @@ LINUX = sys.platform.startswith("linux")
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 SETUP_UNINSTALLER = "Uninstall Syncplay Marquee.exe"  # Put next to the app by the Windows Setup wizard (tools/make-setup.py)
 SETUP_UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\SyncplayMarquee"  # Its Apps & features entry
+PACKAGE_ENV = "MARQUEE_PACKAGE"  # Set by the .deb package's start script: the folder the package installed
+PACKAGE_NAME = "syncplay-marquee"
+PACKAGE_COMMAND = "/usr/bin/syncplay-marquee"
+PACKAGE_DATA = "syncplay-marquee"  # The person's own copy of the app files, in ~/.local/share
 
 
 def installedBySetup(root):
@@ -52,6 +59,29 @@ def refreshSetupEntry(build, reg=None):
         pass
 
 
+def packageFolder():
+    """Linux: the folder the .deb package installed (/opt/syncplay-marquee) when this copy was started from it, else None."""
+    folder = os.environ.get(PACKAGE_ENV) if LINUX else None
+    return folder if folder and os.path.isdir(os.path.join(folder, "runtime")) else None
+
+
+def packageDataRoot():
+    return os.path.join(_dataHome(), PACKAGE_DATA)
+
+
+def installedByPackage():
+    """True when this copy runs from the .deb package: then the package owns the menu entry, the icon and the link
+    handler, the system's package tools remove it, and the app's own first-start install window stays away."""
+    return packageFolder() is not None and rootFolder() is not None
+
+
+def removePackage(popen=subprocess.Popen):
+    """Start removing the .deb package. The system asks for the password itself; the process's exit code says whether it
+    worked (pkexec gives 126 when the password window was closed). Raises OSError if it can't be started."""
+    return popen(["pkexec", "apt-get", "remove", "-y", PACKAGE_NAME], close_fds=True, stdin=subprocess.DEVNULL,
+                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def appFolder():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -65,6 +95,8 @@ def rootFolder(appDir=None):
     override = os.environ.get("MARQUEE_HOME")  # The .exe honours this too (used for testing)
     if override and os.path.basename(appDir) == "app" and os.path.abspath(override) == root:
         return root
+    if packageFolder() and os.path.basename(appDir) == "app" and _same(root, packageDataRoot()):
+        return root
     return None
 
 
@@ -74,7 +106,7 @@ def isPackaged(appDir=None):
         return False
     if os.name == "nt":
         return True
-    return LINUX and os.path.isdir(os.path.join(root, "runtime"))
+    return LINUX and (os.path.isdir(os.path.join(root, "runtime")) or packageFolder() is not None)
 
 
 # --- where to install --------------------------------------------------------------------------------------------------
@@ -271,9 +303,12 @@ def _quoteExec(path):
 
 
 def desktopEntry(root, links=False):
-    icon = os.path.join(root, "app", "syncplay", "resources", "syncplay.png")
+    if packageFolder():
+        command, icon = PACKAGE_COMMAND, DESKTOP_ID  # The icon the package put in the system's icon theme
+    else:
+        command, icon = launcherPath(root), os.path.join(root, "app", "syncplay", "resources", "syncplay.png")
     lines = ["[Desktop Entry]", "Type=Application", "Version=1.0", "Name=Syncplay Marquee",
-             "Comment=Watch videos in sync with friends", "Exec={} %u".format(_quoteExec(launcherPath(root))),
+             "Comment=Watch videos in sync with friends", "Exec={} %u".format(_quoteExec(command)),
              "Icon={}".format(icon), "Terminal=false", "Categories=AudioVideo;Video;Network;", "StartupNotify=true"]
     if links:
         lines += ["NoDisplay=true", "MimeType=x-scheme-handler/{};".format(invite.SCHEME)]
@@ -325,6 +360,86 @@ def registerLinuxLinks(root, runner=subprocess.run):
         pass
 
 
+def _unquoteExec(line):
+    """The first argument of a .desktop Exec line written by _quoteExec, or None."""
+    if not line.startswith('Exec="'):
+        return None
+    text, out, i = line[len('Exec="'):].replace("%%", "%"), [], 0
+    while i < len(text):
+        if text[i] == "\\" and i + 1 < len(text):
+            out.append(text[i + 1])
+            i += 2
+        elif text[i] == '"':
+            return "".join(out)
+        else:
+            out.append(text[i])
+            i += 1
+    return None
+
+
+def _entryRoot(path):
+    """The install folder an existing menu entry, desktop launcher or link handler of the download version starts, or None."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                launcher = _unquoteExec(line.rstrip("\n"))
+                if launcher and os.path.basename(launcher) == LAUNCHER_NAME:
+                    return os.path.dirname(launcher)
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def isDownloadInstall(root):
+    """A folder the Linux download (.tar.xz) was installed to: its own runtime, app files and start script."""
+    return bool(root) and os.path.basename(os.path.abspath(root)) == FOLDER_NAME and all(
+        os.path.exists(os.path.join(root, part)) for part in ("runtime", os.path.join("app", "program", "launch-syncplay.pyw"), LAUNCHER_NAME))
+
+
+def adoptPackage(runner=subprocess.run, popen=subprocess.Popen):
+    """Each start from the .deb package: retire what an earlier download version (.tar.xz) left for this person. Its menu
+    entry would hide the package's own and its link handler would open the old copy, so both go; a desktop launcher is
+    kept but now starts the package; the old folder is removed once this copy closes. Returns the old folders."""
+    old, changed = [], False
+    for kind in ("menu", "links"):
+        path = linuxEntryPath(kind, runner)
+        if not os.path.exists(path):
+            continue
+        root = _entryRoot(path)
+        if root and isDownloadInstall(root) and root not in old:
+            old.append(root)
+        try:
+            os.remove(path)
+            changed = True
+        except OSError:
+            pass
+    desktop = linuxEntryPath("desktop", runner)
+    root = _entryRoot(desktop)
+    if root:
+        try:
+            writeLinuxEntry("desktop", packageDataRoot(), runner)
+        except OSError:
+            pass
+        if isDownloadInstall(root) and root not in old:
+            old.append(root)
+    usual = targetRoot(defaultParent())  # Where the download version's install window puts it
+    if isDownloadInstall(usual) and usual not in old:
+        old.append(usual)
+    if changed:
+        _refreshMenus(runner)
+        try:  # Links go to the package's own handler again
+            runner(["xdg-mime", "default", DESKTOP_ID + ".desktop", "x-scheme-handler/{}".format(invite.SCHEME)], timeout=20,
+                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    for root in old:
+        try:
+            removeFolderLater(root, popen=popen)
+        except (OSError, ValueError):
+            pass
+    return old
+
+
 def linuxLinksRegistered(root, runner=subprocess.run):
     try:
         with open(linuxEntryPath("links", runner), encoding="utf-8") as f:
@@ -338,7 +453,8 @@ def linuxLinksRegistered(root, runner=subprocess.run):
 def existingShortcuts(runner=subprocess.run):
     """{'menu': bool, 'desktop': bool} for the shortcuts that exist now (best effort; used to pre-tick the install window)."""
     if LINUX:
-        return {"menu": os.path.exists(linuxEntryPath("menu", runner)), "desktop": os.path.exists(linuxEntryPath("desktop", runner))}
+        menu = packageFolder() is not None or os.path.exists(linuxEntryPath("menu", runner))  # The package has its own
+        return {"menu": menu, "desktop": os.path.exists(linuxEntryPath("desktop", runner))}
     appData, profile = os.environ.get("APPDATA", ""), os.environ.get("USERPROFILE", "")
     return {"menu": os.path.exists(os.path.join(appData, "Microsoft", "Windows", "Start Menu", "Programs", "Syncplay Marquee.lnk")),
             "desktop": os.path.exists(os.path.join(profile, "Desktop", "Syncplay Marquee.lnk"))}
@@ -348,6 +464,8 @@ def setShortcuts(root, menu, desktop, runner=subprocess.run):
     """Make the shortcuts match the two choices (creating or removing each). Raises OSError if one can't be created."""
     if LINUX:
         for kind, wanted in (("menu", menu), ("desktop", desktop)):
+            if kind == "menu" and packageFolder():
+                continue  # The package's own menu entry; one of ours would only hide it
             if wanted:
                 writeLinuxEntry(kind, root, runner)
             else:
@@ -380,10 +498,18 @@ def startInstalled(root, arguments=(), popen=subprocess.Popen):
           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def _ownFolder(folder):
+    """An install folder (or the package's per-person copy) with the app inside: the only kind this app ever deletes."""
+    name = os.path.basename(os.path.abspath(folder))
+    if name == PACKAGE_DATA and not _same(folder, packageDataRoot()):
+        return False
+    return name in (FOLDER_NAME, PACKAGE_DATA) and os.path.isdir(os.path.join(folder, "app"))
+
+
 def removeFolderLater(folder, pid=None, popen=subprocess.Popen, tempDir=None):
     """Delete an old install folder once this process (pid) has closed. Only ever a folder this app installed."""
     folder = os.path.abspath(folder)
-    if os.path.basename(folder) != FOLDER_NAME or not os.path.isdir(os.path.join(folder, "app")):
+    if not _ownFolder(folder):
         raise ValueError("Refusing to remove {!r}: not a Syncplay Marquee folder".format(folder))
     if os.name == "nt":
         script = uninstallScript(folder)
@@ -464,7 +590,7 @@ def uninstall(configDir, deleteSettings=False, root=None, launcher=subprocess.Po
         raise ValueError("This copy of the app isn't an installed one, so there is nothing to uninstall.")
     settings = [os.path.join(configDir, name) for name in SETTINGS_FILES] if (deleteSettings and configDir) else []
     if LINUX:
-        if os.path.basename(os.path.abspath(root)) != FOLDER_NAME or not os.path.isdir(os.path.join(root, "app")):
+        if not _ownFolder(root):
             raise ValueError("Refusing to remove {!r}: not a Syncplay Marquee folder".format(root))
         for kind in ("menu", "desktop", "links"):
             removeLinuxEntry(kind, runner)
