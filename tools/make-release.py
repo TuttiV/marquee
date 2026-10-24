@@ -9,7 +9,7 @@
    it; the printed sha256 line is only a fallback for releases GitHub didn't checksum.
 
 Never includes syncplay-defaults.json or syncplay-secrets.json (your API keys), and refuses to build if any key from your
-local syncplay-defaults.json appears anywhere in the zip."""
+local syncplay-defaults.json appears anywhere in the zip (except the shared OpenSubtitles key, which is public on purpose)."""
 import argparse
 import hashlib
 import json
@@ -47,9 +47,13 @@ def bundleFiles():
 
 
 def localSecrets():
+    """Keys from a local syncplay-defaults.json, except the shared OpenSubtitles key, which the code carries on purpose."""
+    sys.path.insert(0, ROOT)
+    from syncplay import constants
     try:
         with open(os.path.join(ROOT, "syncplay-defaults.json"), encoding="utf-8") as f:
-            return [v for v in json.load(f).values() if isinstance(v, str) and len(v) >= 12]
+            return [v for v in json.load(f).values()
+                    if isinstance(v, str) and len(v) >= 12 and v.strip() != constants.OPENSUBTITLES_SHARED_API_KEY]
     except (OSError, ValueError):
         return []
 

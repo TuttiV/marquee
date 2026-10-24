@@ -8,8 +8,9 @@ A private desktop app for watching videos together, in sync, with a clean look.
 
 ## Install
 
-- **Windows:** run the Setup `.exe`. It asks for the install folder and which shortcuts you want (Start menu,
-  desktop), needs no administrator rights, and adds an uninstaller under Settings > Apps. The single `.exe` still works too.
+- **Windows:** download `marquee-setup-vN.exe` from the Releases page and run it. It asks for the install folder and which
+  shortcuts you want (Start menu, desktop), needs no administrator rights, and adds an uninstaller under Settings > Apps.
+  Windows may warn that the file is unrecognised: choose More info > Run anyway.
 - **Linux Mint, Ubuntu (64-bit):** download `marquee_N_amd64.deb` from the Releases page and open it. The package installer
   asks for your password once, adds mpv if you have no video player, and puts the app in the applications menu. Remove it
   with Help > Uninstall or like any other package.

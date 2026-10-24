@@ -141,12 +141,24 @@ class OpenSubtitlesAccountTests(unittest.TestCase):
         patcher = mock.patch("syncplay.secrets.bundledDefault", side_effect=lambda name: original(name, self.app))
         patcher.start()
         self.addCleanup(patcher.stop)
+        patcher = mock.patch("syncplay.constants.OPENSUBTITLES_SHARED_API_KEY", "")  # As a build without the shared key
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def client(self, config=None):
         client = object.__new__(SyncplayClient)
         client.ui = FakeUI()
         client._config = {"configDir": self.dir, **(config or {})}
         return client
+
+    def test_every_copy_falls_back_on_the_shared_key(self):
+        with mock.patch("syncplay.constants.OPENSUBTITLES_SHARED_API_KEY", "SHAREDKEY5678"):
+            self.assertEqual(self.client().openSubtitlesKeyStatus(), ("builtin", "5678"))
+            self.bundle("BUILTINKEY9999")  # A build that ships its own key uses that one
+            self.assertEqual(self.client().openSubtitlesKeyStatus(), ("builtin", "9999"))
+            client = self.client()
+            client.saveOpenSubtitlesSettings("MYKEY1234")  # And the person's own key beats both
+            self.assertEqual(client.openSubtitlesKeyStatus(), ("own", "1234"))
 
     def bundle(self, key):
         with open(os.path.join(self.app, secrets.DEFAULTS_FILE_NAME), "w") as f:
@@ -252,12 +264,17 @@ class BundledDefaultKeyTests(unittest.TestCase):
         self.assertTrue(self.client.hasOpenSubtitlesKey())
         self.assertEqual(self.client._config["openSubtitlesApiKey"], "MINE")
 
-    def test_missing_or_broken_defaults_mean_no_key(self):
-        self.assertFalse(self.client.hasOpenSubtitlesKey())
-        self.write("{nope")
-        self.assertFalse(self.client.hasOpenSubtitlesKey())
-        self.write('{"openSubtitlesApiKey": ""}')
-        self.assertFalse(self.client.hasOpenSubtitlesKey())
+    def test_missing_or_broken_defaults_fall_back_on_the_shared_key(self):
+        with mock.patch("syncplay.constants.OPENSUBTITLES_SHARED_API_KEY", "SHARED"):
+            for text in (None, "{nope", '{"openSubtitlesApiKey": ""}'):
+                if text is not None:
+                    self.write(text)
+                self.client._config = {}
+                self.assertTrue(self.client.hasOpenSubtitlesKey())
+                self.assertEqual(self.client._config["openSubtitlesApiKey"], "SHARED")
+        with mock.patch("syncplay.constants.OPENSUBTITLES_SHARED_API_KEY", ""):  # A build without one has no key at all
+            self.client._config = {}
+            self.assertFalse(self.client.hasOpenSubtitlesKey())
 
 
 if __name__ == "__main__":
