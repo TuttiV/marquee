@@ -6,10 +6,10 @@ name: Publish release
 #   - change the number in release-build.txt on main (for example to 26), or
 #   - push a tag like v26.
 # The release is named "Build N", the zip is attached as marquee-vN.zip, and the notes come from syncplay/CHANGELOG.md.
-# The Linux downloads (marquee-linux-x86_64-vN.tar.xz and the package marquee_N_amd64.deb) are built and attached too;
-# if that build fails the zip still ships. A build number that already has a release is skipped, so re-running is
-# harmless. The one exception: a release that is missing a Linux download gets it added (changing this file on main also
-# starts a run, to fill that in).
+# The Linux downloads (marquee-linux-x86_64-vN.tar.xz and the package marquee_N_amd64.deb) and the Windows Setup
+# (marquee-setup-vN.exe) are built and attached too; if one of those fails the zip still ships. A build number that
+# already has a release is skipped, so re-running is harmless. The one exception: a release that is missing a Linux
+# download gets it added (changing this file on main also starts a run, to fill that in).
 on:
   push:
     branches:
@@ -73,6 +73,20 @@ jobs:
           printf '{"updateRepo": "%s"}\n' "$REPO" > linux-defaults.json
           python tools/make-linux.py --build "$BUILD" --defaults linux-defaults.json --out dist
 
+      # The same Setup as tools/make-setup.py makes by hand: NSIS for the wizard, mingw for its launcher, ImageMagick for
+      # the artwork. Its Python and libraries are the Windows ones, downloaded by the builder.
+      - name: Build the Windows Setup
+        if: env.SKIP != '1' && env.LINUX_ONLY != '1'
+        continue-on-error: true
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends nsis gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 imagemagick
+          printf '{"updateRepo": "%s"}\n' "$REPO" > windows-defaults.json
+          python tools/make-setup.py --build "$BUILD" --defaults windows-defaults.json --out dist-windows
+          mv "dist-windows/Syncplay Marquee Setup.exe" "dist/marquee-setup-v${BUILD}.exe"
+
       - name: Write the release notes
         if: env.SKIP != '1' && env.LINUX_ONLY != '1'
         run: |
@@ -92,6 +106,9 @@ jobs:
           deb = "dist/marquee_%d_amd64.deb" % build
           if os.path.isfile(deb):
               sums.append("Linux .deb sha256: " + sha(deb))
+          setup = "dist/marquee-setup-v%d.exe" % build
+          if os.path.isfile(setup):
+              sums.append("Windows Setup sha256: " + sha(setup))
           open("notes.md", "w", encoding="utf-8").write("\n".join(lines) + "\n\n" + "\n".join(sums) + "\n")
           PY
 
@@ -101,8 +118,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           assets=("dist/marquee-v${BUILD}.zip")
-          for linux in "dist/marquee-linux-x86_64-v${BUILD}.tar.xz" "dist/marquee_${BUILD}_amd64.deb"; do
-            if [ -f "$linux" ]; then assets+=("$linux"); fi
+          for extra in "dist/marquee-setup-v${BUILD}.exe" "dist/marquee-linux-x86_64-v${BUILD}.tar.xz" "dist/marquee_${BUILD}_amd64.deb"; do
+            if [ -f "$extra" ]; then assets+=("$extra"); fi
           done
           gh release create "v${BUILD}" "${assets[@]}" --title "Build ${BUILD}" --notes-file notes.md --target "$GITHUB_SHA"
 

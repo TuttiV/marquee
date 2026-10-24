@@ -1,3 +1,8 @@
+## Build 34 - TorBox links for everyone, subtitles out of the box, Windows Setup on GitHub
+- A TorBox link someone puts in the room's playlist now plays for everyone straight away, whether it came from the TorBox library window or was pasted. TorBox gives every file its own server (nexus-280..., nexus-290...), so adding one as a trusted domain never covered the next link; TorBox's servers are now always trusted.
+- Subtitle search works in every download with nothing to set up: the app now comes with an OpenSubtitles key. A key of your own (Find subtitles > Account) still takes priority.
+- Windows: the Setup is now on the Releases page too (marquee-setup-v34.exe), so you can share that link instead of the file.
+
 ## Build 33 - A tidier Linux package
 - The Linux package (.deb) no longer installs the 32-bit system library libc6-i386, which the app never used. Nothing else changed.
 

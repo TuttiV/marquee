@@ -403,7 +403,14 @@ SYNCPLAY_UPDATE_URL = "https://syncplay.pl/checkforupdate?{}"  # Params
 SYNCPLAY_DOWNLOAD_URL = "https://syncplay.pl/download/"
 SYNCPLAY_PUBLIC_SERVER_LIST_URL = "https://syncplay.pl/listpublicservers?{}"  # Params
 
+# The OpenSubtitles API key every copy of the app uses unless the person enters their own (Subtitles > settings).
+# A free key, shipped in the open on purpose so subtitle search works in every download.
+OPENSUBTITLES_SHARED_API_KEY = "DLH2hWUc1UIGfJVKWuBRcxsP61gEfMYJ"
+
 DEFAULT_TRUSTED_DOMAINS = ["youtube.com", "youtu.be"]
+# Always trusted, with every server under them: TorBox's stream links each name their own server
+# (nexus-280.weur.tb-cdn.st, then nexus-290... for the next file), so trusting one by hand never covers the next
+BUILT_IN_TRUSTED_DOMAINS = ["tb-cdn.st", "torbox.app"]
 TRUSTABLE_WEB_PROTOCOLS = ["http", "https"]
 
 PRIVATE_FILE_FIELDS = ["path"]

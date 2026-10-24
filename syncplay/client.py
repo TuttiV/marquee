@@ -927,6 +927,7 @@ class SyncplayClient(object):
         Such an entry is considered matching if the domain is the same and the path
         is a prefix of the given URI's path.
         A "trustable" URI is always "trusted" if the config onlySwitchToTrustedDomains is false.
+        TorBox's stream servers (constants.BUILT_IN_TRUSTED_DOMAINS and anything under them) are always trusted.
         """
         o = urlparse(URIToTest)
         trustable = o.scheme in constants.TRUSTABLE_WEB_PROTOCOLS
@@ -935,6 +936,9 @@ class SyncplayClient(object):
             return False, False
         if not self._config['onlySwitchToTrustedDomains']:
             # trust all trustable URIs in this case
+            return trustable, True
+        hostname = (o.hostname or "").lower()
+        if any(hostname == domain or hostname.endswith("." + domain) for domain in constants.BUILT_IN_TRUSTED_DOMAINS):
             return trustable, True
         # check for matching trusted domains
         if self._config['trustedDomains']:
@@ -1444,7 +1448,8 @@ class SyncplayClient(object):
 
     def hasOpenSubtitlesKey(self):
         """True if there is a key to use. Order: the user's own key (settings file, then the dedicated secrets file),
-        then the default shipped inside this build. The built-in default is only ever held in memory."""
+        then the default shipped inside this build, then the shared key in the code. A built-in key is only ever held in
+        memory."""
         if not (self._config.get("openSubtitlesApiKey") or "").strip():
             own = None
             try:
@@ -1461,7 +1466,7 @@ class SyncplayClient(object):
                             pass
                 self._openSubtitlesKeyIsBuiltin = False
             else:
-                default = secrets.bundledDefault("openSubtitlesApiKey")
+                default = secrets.bundledDefault("openSubtitlesApiKey") or constants.OPENSUBTITLES_SHARED_API_KEY
                 if default:
                     self._config["openSubtitlesApiKey"] = default  # In memory only - never written to the user's config
                     self._openSubtitlesKeyIsBuiltin = True

@@ -687,7 +687,7 @@ en = {
 
     "adduris-msgbox-label": "Add URLs to playlist (one per line)",
     "editplaylist-msgbox-label": "Set playlist (one per line)",
-    "trusteddomains-msgbox-label": "Domains it is okay to automatically switch to (one per line)",
+    "trusteddomains-msgbox-label": "Domains it is okay to automatically switch to (one per line). TorBox links are always trusted.",
 
     "createcontrolledroom-msgbox-label": "Create managed room",
     "controlledroominfo-msgbox-label": "Enter name of managed room\r\n(see https://syncplay.pl/guide/ for usage instructions):",

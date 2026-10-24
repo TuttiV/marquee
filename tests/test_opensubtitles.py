@@ -6,6 +6,7 @@ import shutil
 import struct
 import tempfile
 import unittest
+from unittest import mock
 import urllib.error
 from urllib.parse import parse_qs, urlparse
 
@@ -369,9 +370,17 @@ class ChatDeliveryTests(unittest.TestCase):
         self.assertTrue(self.client.handleSubtitleChatReference("me", line))
         self.assertFalse(self.client.handleSubtitleChatReference("bob", "just chatting"))
         os_line = "Subtitle picked: a.srt (Syncplay sub: os:42)"
-        self.assertTrue(self.client.handleSubtitleChatReference("bob", os_line))
+        with mock.patch.object(constants, "OPENSUBTITLES_SHARED_API_KEY", ""):  # A copy with no key at all
+            self.assertTrue(self.client.handleSubtitleChatReference("bob", os_line))
         self.assertEqual(downloads, [])
         self.assertIn("API key", self.client.ui.messages[-1])
+
+    def test_os_refs_load_with_the_shared_key(self):
+        downloads = []
+        self.client.downloadSubtitle = lambda *a, **k: downloads.append(a) or defer.succeed("x")
+        with mock.patch.object(constants, "OPENSUBTITLES_SHARED_API_KEY", "SHAREDKEY5678"):
+            self.assertTrue(self.client.handleSubtitleChatReference("bob", "Subtitle picked: a.srt (Syncplay sub: os:42)"))
+        self.assertEqual(len(downloads), 1)
 
     def test_auto_load_off_downloads_but_does_not_load(self):
         calls = []
